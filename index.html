@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0D2B45">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CSMC Chanco">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <title>CSMC Chanco — Sistema Logístico Móvil</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -643,30 +652,42 @@ function hhmm(mins) {
 function cargarVisitasHoy() {
   if (!GAS_URL) return;
   var hoy = new Date();
-  var yyyy = hoy.getFullYear();
-  var mm = String(hoy.getMonth()+1).padStart(2,'0');
-  var dd = String(hoy.getDate()).padStart(2,'0');
-  var fechaHoy = yyyy+'-'+mm+'-'+dd;
-  var url = GAS_URL + '?accion=cargar&fecha=' + fechaHoy + '&callback=recibirVisitas';
+  var fecha = hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
+  
+  // Usar fetch con modo no-cors no devuelve datos, usar script tag JSONP
   var sid = 'gas_load_'+Date.now();
   var script = document.createElement('script');
   script.id = sid;
-  script.src = url;
-  script.onerror = function() { console.warn('No se pudieron cargar visitas previas'); };
+  script.src = GAS_URL + '?accion=cargar&fecha=' + fecha + '&callback=recibirVisitas&t='+Date.now();
   document.head.appendChild(script);
+  
+  // Timeout de seguridad
   setTimeout(function(){
     var el = document.getElementById(sid);
-    if (el) document.head.removeChild(el);
-  }, 10000);
+    if (el) { document.head.removeChild(el); }
+    // Si no llegaron datos, mostrar aviso
+    if (registros.length === 0) {
+      console.log('Sin visitas previas cargadas para hoy');
+    }
+  }, 8000);
 }
 
 function recibirVisitas(data) {
-  if (!data || !data.ok || !data.visitas || !data.visitas.length) return;
+  if (!data || !data.ok) {
+    console.warn('Sheets: respuesta sin datos', data);
+    return;
+  }
+  var visitas = data.visitas || [];
+  if (!visitas.length) {
+    console.log('Sin visitas registradas hoy en Sheets');
+    return;
+  }
   var cargadas = 0;
-  data.visitas.forEach(function(v) {
-    // Evitar duplicados
+  visitas.forEach(function(v) {
+    if (!v.paciente && !v.profesional) return; // fila vacía
     var existe = registros.some(function(r) {
-      return r.ts === v.timestamp || (r.fecha===v.fecha && r.pac===v.paciente && r.hs===v.horaSalida);
+      return r.ts === v.timestamp || 
+             (r.fecha === v.fecha && r.pac === v.paciente && r.hs === v.horaSalida);
     });
     if (existe) return;
     registros.push({
@@ -676,8 +697,7 @@ function recibirVisitas(data) {
       prof: v.profesional||'', rol: v.rol||'', prest: v.prestacion||'',
       comuna: v.comuna||'', local: v.localidad||'',
       dir: v.direccion||'', coords: v.coordenadas||'',
-      lat: v.lat ? parseFloat(v.lat) : null,
-      lng: v.lng ? parseFloat(v.lng) : null,
+      lat: null, lng: null,
       pac: v.paciente||'', rut: v.rut||'',
       tel: v.telefono||'', cf: v.correoFamilia||'',
       nc: v.notifCorreoProf||'', nw: v.notifWAProf||'',
@@ -689,12 +709,11 @@ function recibirVisitas(data) {
       dist: v.distanciaKm||'—',
       totOp: v.totalOperativo||'',
       estado: v.estado||'Agendada',
-      ts: v.timestamp||''
+      ts: v.timestamp||new Date().toISOString()
     });
     cargadas++;
   });
   if (cargadas > 0) {
-    // Renumerar IDs
     registros.forEach(function(r,i){ r.id=i+1; });
     renderReg();
     buildHR();
@@ -1453,6 +1472,21 @@ window.onload = function() {
     setTimeout(cargarVisitasHoy, 800);
   }
 };
+</script>
+
+<!-- PWA: registrar service worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js')
+      .then(function(reg) {
+        console.log('Service Worker registrado:', reg.scope);
+      })
+      .catch(function(err) {
+        console.warn('Error registrando Service Worker:', err);
+      });
+  });
+}
 </script>
 </body>
 </html>
