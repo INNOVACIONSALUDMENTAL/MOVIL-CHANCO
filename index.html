@@ -1508,31 +1508,43 @@ function guardarEnSheets(r) {
     'estado='+encodeURIComponent(r.estado||'Agendada'),
     'timestamp='+encodeURIComponent(r.ts||''),
     'lat='+encodeURIComponent(r.lat!=null?r.lat:''),
-    'lng='+encodeURIComponent(r.lng!=null?r.lng:'')
+    'lng='+encodeURIComponent(r.lng!=null?r.lng:''),
+    'callback=gasOk'
   ].join('&');
 
-  var url = GAS_URL + '?' + params;
-
-  // METODO 1: fetch (funciona desde GitHub Pages con GAS)
-  fetch(url, {mode:'no-cors'})
-    .then(function() {
-      r.sync = 'ok';
-      renderReg();
+  // Script tag JSONP — funciona desde cualquier origen, sin restricciones CORS
+  var sid = 'gas_s_'+Date.now();
+  var script = document.createElement('script');
+  script.id = sid;
+  script.src = GAS_URL + '?' + params;
+  script.onload = function() {
+    r.sync = 'ok';
+    persistRegistros();
+    renderReg();
+  };
+  script.onerror = function() {
+    r.sync = 'error';
+    persistRegistros();
+    renderReg();
+    console.warn('Sheets: error de red al guardar');
+  };
+  document.head.appendChild(script);
+  // Limpiar el tag después de 8 segundos
+  setTimeout(function(){
+    var el = document.getElementById(sid);
+    if(el){ try{document.head.removeChild(el);}catch(e){} }
+    // Si no respondió, marcar como error
+    if(r.sync === 'pending'){
+      r.sync = 'error';
       persistRegistros();
-      console.log('Sheets OK (fetch)');
-    })
-    .catch(function(err) {
-      console.warn('fetch falló, probando Image():', err);
-      // METODO 2: Image() como respaldo (funciona siempre, fire-and-forget)
-      var img = new Image();
-      img.onload = img.onerror = function() {
-        r.sync = 'ok';
-        renderReg();
-        persistRegistros();
-        console.log('Sheets OK (Image)');
-      };
-      img.src = url;
-    });
+      renderReg();
+    }
+  }, 8000);
+}
+
+function gasOk(data) {
+  // Callback JSONP global — confirmación del servidor
+  console.log('Sheets: guardado OK', data);
 }
 
 
@@ -1558,10 +1570,11 @@ function cambiarEstado(gi, nuevoEstado) {
 function actualizarEstadoEnSheets(r) {
   if (!GAS_URL || !r.ts) return;
   var url = GAS_URL + '?accion=actualizar&timestamp='+encodeURIComponent(r.ts)
-    +'&estado='+encodeURIComponent(r.estado);
-  fetch(url, {mode:'no-cors'}).catch(function() {
-    new Image().src = url;
-  });
+    +'&estado='+encodeURIComponent(r.estado)+'&callback=gasOk';
+  var s = document.createElement('script');
+  s.src = url;
+  document.head.appendChild(s);
+  setTimeout(function(){ try{document.head.removeChild(s);}catch(e){} }, 5000);
 }
 
 // ============================================================
