@@ -1620,5 +1620,17 @@ window.onload = function() {
   }
 };
 </script>
+
+<script>
+// Desregistrar service worker anterior (causaba bloqueo de peticiones a Google Sheets)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    registrations.forEach(function(r) {
+      r.unregister();
+      console.log('Service worker desregistrado:', r.scope);
+    });
+  });
+}
+</script>
 </body>
 </html>
