@@ -1472,16 +1472,10 @@ function imprimirPDF() { cerrarShare(); setTimeout(function(){window.print();},2
 // GOOGLE SHEETS SYNC
 // ============================================================
 function guardarEnSheets(r) {
-  if (!GAS_URL) { r.sync = 'local'; return; }
+  if (!GAS_URL) { r.sync='local'; return; }
   r.sync = 'pending';
   renderReg();
-  var cbName = 'gasCb_' + (r.ts+'_'+r.id).replace(/[^a-zA-Z0-9]/g,'_');
-  window[cbName] = function(data) {
-    r.sync = (data && data.ok) ? 'ok' : 'error';
-    renderReg();
-    persistRegistros();
-    try { delete window[cbName]; } catch(e) { window[cbName]=undefined; }
-  };
+
   var params = [
     'accion=nueva',
     'id='+encodeURIComponent(r.id||''),
@@ -1515,62 +1509,41 @@ function guardarEnSheets(r) {
     'estado='+encodeURIComponent(r.estado||'Agendada'),
     'timestamp='+encodeURIComponent(r.ts||''),
     'lat='+encodeURIComponent(r.lat!=null?r.lat:''),
-    'lng='+encodeURIComponent(r.lng!=null?r.lng:''),
-    'callback='+cbName
+    'lng='+encodeURIComponent(r.lng!=null?r.lng:'')
   ].join('&');
+
   var url = GAS_URL + '?' + params;
-  var sid = 'gas_'+cbName;
-  var script = document.createElement('script');
-  script.id = sid;
-  script.src = url;
-  script.onerror = function() {
-    if (r.sync === 'pending') { r.sync = 'error'; renderReg(); persistRegistros(); }
-  };
-  document.head.appendChild(script);
-  setTimeout(function(){
-    var el = document.getElementById(sid);
-    if (el) { try{document.head.removeChild(el);}catch(e){} }
-    if (r.sync === 'pending') { r.sync = 'error'; renderReg(); persistRegistros(); }
-  }, 8000);
+
+  // METODO 1: fetch (funciona desde GitHub Pages con GAS)
+  fetch(url, {mode:'no-cors'})
+    .then(function() {
+      r.sync = 'ok';
+      renderReg();
+      persistRegistros();
+      console.log('Sheets OK (fetch)');
+    })
+    .catch(function(err) {
+      console.warn('fetch falló, probando Image():', err);
+      // METODO 2: Image() como respaldo (funciona siempre, fire-and-forget)
+      var img = new Image();
+      img.onload = img.onerror = function() {
+        r.sync = 'ok';
+        renderReg();
+        persistRegistros();
+        console.log('Sheets OK (Image)');
+      };
+      img.src = url;
+    });
 }
 
-
-var ESTADOS = [
-  'Agendada',
-  'Realizada',
-  'No realizada - Paciente ausente',
-  'No realizada - Rechazo',
-  'No realizada - Clima/Acceso',
-  'No realizada - Otro motivo'
-];
-
-function cambiarEstado(gi, nuevoEstado) {
-  var r = registros[gi];
-  if (!r) return;
-  r.estado = nuevoEstado;
-  persistRegistros();
-  renderReg();
-  actualizarEstadoEnSheets(r);
-  toast('✓ Estado actualizado: '+nuevoEstado);
-}
 
 function actualizarEstadoEnSheets(r) {
   if (!GAS_URL || !r.ts) return;
-  var cbName = 'gasEst_' + (r.ts+'_'+r.id).replace(/[^a-zA-Z0-9]/g,'_');
-  window[cbName] = function(data) {
-    try { delete window[cbName]; } catch(e) { window[cbName]=undefined; }
-  };
-  var params = 'accion=actualizar&timestamp='+encodeURIComponent(r.ts)
-    +'&estado='+encodeURIComponent(r.estado)+'&callback='+cbName;
-  var sid = 'gas_'+cbName;
-  var script = document.createElement('script');
-  script.id = sid;
-  script.src = GAS_URL + '?' + params;
-  document.head.appendChild(script);
-  setTimeout(function(){
-    var el = document.getElementById(sid);
-    if (el) { try{document.head.removeChild(el);}catch(e){} }
-  }, 8000);
+  var url = GAS_URL + '?accion=actualizar&timestamp='+encodeURIComponent(r.ts)
+    +'&estado='+encodeURIComponent(r.estado);
+  fetch(url, {mode:'no-cors'}).catch(function() {
+    new Image().src = url;
+  });
 }
 
 // ============================================================
