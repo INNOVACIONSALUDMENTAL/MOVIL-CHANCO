@@ -693,6 +693,14 @@ function hhmm(mins) {
   return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
 }
 
+// Extrae HH:MM de cualquier formato: "10:00", "Sat Dec 30 1899 10:00:00...", etc.
+function parsearHora(val) {
+  if (!val || val === 'NaN:NaN' || val === '—') return '';
+  var s = String(val).trim();
+  var m = s.match(/(\d{1,2}):(\d{2})/);
+  return m ? m[1].padStart(2,'0')+':'+m[2] : '';
+}
+
 // ============================================================
 // CARGAR VISITAS DEL DIA DESDE GOOGLE SHEETS
 // ============================================================
@@ -735,8 +743,8 @@ function recibirVisitas(data) {
     if (existe) return;
     registros.push({
       id: registros.length+1,
-      fecha: v.fecha||'', dia: v.dia||'', hs: v.horaSalida||'',
-      llegEst: v.horaLlegadaEst||'', regEst: v.horaRegresoEst||'',
+      fecha: v.fecha||'', dia: v.dia||'', hs: parsearHora(v.horaSalida),
+      llegEst: parsearHora(v.horaLlegadaEst), regEst: parsearHora(v.horaRegresoEst),
       prof: v.profesional||'', rol: v.rol||'', prest: v.prestacion||'',
       comuna: v.comuna||'', local: v.localidad||'',
       dir: v.direccion||'', coords: v.coordenadas||'',
@@ -1209,7 +1217,8 @@ function buildHR() {
   var vis=byD[fecha].slice().sort(function(a,b){return a.hs.localeCompare(b.hs);});
   var d=new Date(fecha+'T12:00:00');
   ge('hr-fecha').textContent=DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()];
-  var hp=vis[0].hs.split(':');
+  var hs0 = parsearHora(vis[0].hs) || '10:00';
+  var hp=hs0.split(':');
   var cur=parseInt(hp[0])*60+parseInt(hp[1]);
   var kmTot=0,timeTot=0,warns=[],stops=[];
   stops.push({c:'so',t:hhmm(cur),tit:'🏥 '+HOSPITAL.n,sub:'Punto de partida fijo del móvil'});
@@ -1224,7 +1233,8 @@ function buildHR() {
     var finFr=enFranja(v.fecha,ll,checkFin);
     if(!finFr&&i<vis.length-1) warns.push('Visita '+(i+1)+' ('+v.pac+') termina a las '+hhmm(fin)+', fuera de la ventana horaria.');
     if(i<vis.length-1){
-      var sig=vis[i+1], sp=sig.hs.split(':'), sigM=parseInt(sp[0])*60+parseInt(sp[1]);
+      var sigHs=parsearHora(vis[i+1].hs)||'00:00';
+      var sig=vis[i+1], sp=sigHs.split(':'), sigM=parseInt(sp[0])*60+parseInt(sp[1]);
       if(sigM-fin<sig.tIda){
         warns.push('⚠ Conflicto visita '+(i+1)+' y '+(i+2)+': solo '+(sigM-fin)+' min disponibles, se necesitan ~'+sig.tIda+' min. Cambia el horario de la visita '+(i+2)+'.');
         finFr=false;
