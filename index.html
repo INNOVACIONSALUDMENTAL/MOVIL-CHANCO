@@ -3,15 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- PWA -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0D2B45">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CSMC Chanco">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <title>CSMC Chanco — Sistema Logístico Móvil</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -375,9 +366,17 @@ header{background:var(--navy);position:sticky;top:0;z-index:100;box-shadow:0 2px
         <div class="f"><label>Rol / Cargo <span class="req">*</span></label>
           <select id="f5" onchange="onPrest()">
             <option value="">— Seleccionar —</option>
-            <option>Psicólogo/a</option><option>Terapeuta Ocupacional</option>
-            <option>Enfermero/a</option><option>Trabajador/a Social</option>
-            <option>Psicopedagoga</option><option>Fonoaudiólogo/a</option><option>TENS</option>
+            <option>Médico/a</option>
+            <option>Psicólogo/a</option>
+            <option>Terapeuta Ocupacional</option>
+            <option>Enfermero/a</option>
+            <option>Trabajador/a Social</option>
+            <option>Técnico Social</option>
+            <option>Técnico en Rehabilitación</option>
+            <option>Psicopedagoga</option>
+            <option>Fonoaudiólogo/a</option>
+            <option>TENS</option>
+            <option>Otro</option>
           </select>
         </div>
         <div class="f fc"><label>Tipo de prestación <span class="req">*</span></label>
@@ -631,7 +630,7 @@ var PREST_BADGE = {
   'Actividad comunitaria':['bc','Comunitaria'],
   'Coordinación con el intersector':['bd','Intersector']
 };
-var ROLES_AC = ['Psicólogo/a','Terapeuta Ocupacional','Enfermero/a','Trabajador/a Social','Psicopedagoga','Fonoaudiólogo/a','TENS','Conductor','Administrativo/a','Estudiante en práctica','Otro'];
+var ROLES_AC = ['Médico/a','Psicólogo/a','Terapeuta Ocupacional','Enfermero/a','Trabajador/a Social','Técnico Social','Técnico en Rehabilitación','Psicopedagoga','Fonoaudiólogo/a','TENS','Conductor','Administrativo/a','Estudiante en práctica','Otro'];
 
 // ============================================================
 // ESTADO
@@ -1475,50 +1474,65 @@ function guardarEnSheets(r) {
   if (!GAS_URL) { r.sync = 'local'; return; }
   r.sync = 'pending';
 
-  var campos = {
-    accion:'nueva', id:r.id||'', fecha:r.fecha||'', dia:r.dia||'',
-    horaSalida:r.hs||'', horaLlegadaEst:r.llegEst||'', horaRegresoEst:r.regEst||'',
-    profesional:r.prof||'', rol:r.rol||'', prestacion:r.prest||'',
-    comuna:r.comuna||'', localidad:r.local||'', direccion:r.dir||'',
-    coordenadas:r.coords||'', paciente:r.pac||'', rut:r.rut||'',
-    telefono:r.tel||'', correoFamilia:r.cf||'', acompanantes:r.acomp||'',
-    duracionVisita:r.durVis||'', trasladoIda:r.tIda||'', trasladoVuelta:r.tVta||'',
-    distanciaKm:r.dist||'', totalOperativo:r.totOp||'',
-    notifCorreoProf:r.nc||'', notifWAProf:r.nw||'',
-    notifCorreoCoord:r.cc||'', notifWACoord:r.cw||'',
-    observaciones:r.obs||'', estado:r.estado||'Agendada',
-    timestamp:r.ts||'',
-    lat:r.lat!=null?r.lat:'', lng:r.lng!=null?r.lng:''
-  };
-
-  var params = Object.keys(campos).map(function(k){
-    return k+'='+encodeURIComponent(campos[k]);
-  }).join('&');
+  var params = [
+    'accion=nueva',
+    'id='+encodeURIComponent(r.id||''),
+    'fecha='+encodeURIComponent(r.fecha||''),
+    'dia='+encodeURIComponent(r.dia||''),
+    'horaSalida='+encodeURIComponent(r.hs||''),
+    'horaLlegadaEst='+encodeURIComponent(r.llegEst||''),
+    'horaRegresoEst='+encodeURIComponent(r.regEst||''),
+    'profesional='+encodeURIComponent(r.prof||''),
+    'rol='+encodeURIComponent(r.rol||''),
+    'prestacion='+encodeURIComponent(r.prest||''),
+    'comuna='+encodeURIComponent(r.comuna||''),
+    'localidad='+encodeURIComponent(r.local||''),
+    'direccion='+encodeURIComponent(r.dir||''),
+    'coordenadas='+encodeURIComponent(r.coords||''),
+    'paciente='+encodeURIComponent(r.pac||''),
+    'rut='+encodeURIComponent(r.rut||''),
+    'telefono='+encodeURIComponent(r.tel||''),
+    'correoFamilia='+encodeURIComponent(r.cf||''),
+    'acompanantes='+encodeURIComponent(r.acomp||''),
+    'duracionVisita='+encodeURIComponent(r.durVis||''),
+    'trasladoIda='+encodeURIComponent(r.tIda||''),
+    'trasladoVuelta='+encodeURIComponent(r.tVta||''),
+    'distanciaKm='+encodeURIComponent(r.dist||''),
+    'totalOperativo='+encodeURIComponent(r.totOp||''),
+    'notifCorreoProf='+encodeURIComponent(r.nc||''),
+    'notifWAProf='+encodeURIComponent(r.nw||''),
+    'notifCorreoCoord='+encodeURIComponent(r.cc||''),
+    'notifWACoord='+encodeURIComponent(r.cw||''),
+    'observaciones='+encodeURIComponent(r.obs||''),
+    'estado='+encodeURIComponent(r.estado||'Agendada'),
+    'timestamp='+encodeURIComponent(r.ts||''),
+    'lat='+encodeURIComponent(r.lat!=null?r.lat:''),
+    'lng='+encodeURIComponent(r.lng!=null?r.lng:''),
+    'callback=gasOk'
+  ].join('&');
 
   var url = GAS_URL + '?' + params;
-
-  // Imagen pixel — el método más simple y robusto, sin CORS ni CSP
-  var img = new Image();
-  img.onload = function() {
-    r.sync = 'ok';
-    persistRegistros();
-    renderReg();
-    console.log('Sheets: guardado OK');
+  var sid = 'gas_'+Date.now();
+  var tag = document.createElement('script');
+  tag.id = sid;
+  tag.src = url;
+  tag.onload = function() {
+    r.sync = 'ok'; persistRegistros(); renderReg();
   };
-  img.onerror = function() {
-    // GAS responde con error de imagen (es JS no imagen) pero la petición llegó
-    r.sync = 'ok';
-    persistRegistros();
-    renderReg();
-    console.log('Sheets: petición enviada');
+  tag.onerror = function() {
+    r.sync = 'error'; persistRegistros(); renderReg();
+    console.warn('Sheets: no se pudo conectar');
   };
-  img.src = url;
+  document.head.appendChild(tag);
+  setTimeout(function() {
+    var el = document.getElementById(sid);
+    if (el) { try{document.head.removeChild(el);}catch(x){} }
+    if (r.sync === 'pending') { r.sync = 'error'; persistRegistros(); renderReg(); }
+  }, 10000);
 }
 
-
 function gasOk(data) {
-  // Callback JSONP global — confirmación del servidor
-  console.log('Sheets: guardado OK', data);
+  console.log('Sheets OK:', data);
 }
 
 
@@ -1574,6 +1588,16 @@ window.onload = function() {
   var yy=n.getFullYear(), mm=String(n.getMonth()+1).padStart(2,'0'), dd=String(n.getDate()).padStart(2,'0');
   ge('f1').value=yy+'-'+mm+'-'+dd;
   onFecha();
+  // Cargar visitas guardadas localmente
+  if (typeof cargarRegistrosLocal === 'function') {
+    cargarRegistrosLocal();
+    if (registros.length) { renderReg(); buildHR(); ge('s-nreg').textContent=registros.length; }
+  }
+  // Cargar desde Sheets
+  if (GAS_URL) {
+    ge('sc-sync').style.display='block';
+    setTimeout(cargarVisitasHoy, 1000);
+  }
 
   // Recuperar visitas guardadas localmente (por si se cerro sin sincronizar)
   cargarRegistrosLocal();
@@ -1595,21 +1619,6 @@ window.onload = function() {
     }, 1500);
   }
 };
-</script>
-
-<!-- PWA: registrar service worker -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('sw.js')
-      .then(function(reg) {
-        console.log('Service Worker registrado:', reg.scope);
-      })
-      .catch(function(err) {
-        console.warn('Error registrando Service Worker:', err);
-      });
-  });
-}
 </script>
 </body>
 </html>
