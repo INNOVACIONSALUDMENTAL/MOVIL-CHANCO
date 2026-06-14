@@ -1,314 +1,1627 @@
-// ============================================================
-// CSMC CHANCO — Google Apps Script Backend v6
-// + actualizar Estado de una visita (Realizada / No realizada...)
-//   buscando la fila por Timestamp (identificador unico y estable)
-// ============================================================
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0D2B45">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CSMC Chanco">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<title>CSMC Chanco — Sistema Logístico Móvil</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#0D2B45;--blue:#1A5276;--bm:#2E86C1;--bl:#AED6F1;--bp:#EBF5FB;
+  --teal:#0E6655;--tl:#A9DFBF;--tp:#E9F7EF;
+  --amber:#B7770D;--ap:#FEF9E7;
+  --red:#922B21;--rp:#FDEDEC;
+  --pur:#6C3483;--pp:#F4ECF7;
+  --gd:#2C3E50;--gm:#5D6D7E;--gl:#BFC9CA;--gp:#F2F3F4;
+  --bdr:#D5DBDB;--wh:#FFF;--tx:#1A252F;
+  --r:6px;--rl:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans',sans-serif;background:#E8EDF0;color:var(--tx);}
+a{color:inherit;}
 
-var SHEET_ID     = '15wCBGCJrPTMn7R8RHRLRDpX6Ap2I89XAwpIeS8TvinU';
-var HOJA_VISITAS = 'Visitas';
-var HOJA_LOG     = 'Log_Errores';
+/* HEADER */
+header{background:var(--navy);position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.3);}
+.hi{display:flex;align-items:center;gap:14px;padding:13px 26px;flex-wrap:wrap;}
+.logo{background:var(--bm);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;padding:4px 10px;border-radius:var(--r);letter-spacing:.08em;}
+.hi h1{color:#fff;font-size:15px;font-weight:500;}
+.hi .sub{color:var(--bl);font-size:12px;font-weight:300;}
+.hbadge{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px;margin-left:auto;}
+.hbadge.ok{background:var(--tp);color:var(--teal);border:1px solid var(--tl);}
+.hbadge.no{background:var(--rp);color:var(--red);border:1px solid #F1948A;}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block;}
 
-var HEADERS = [
-  'ID', 'Fecha', 'Día', 'Hora salida', 'Llegada est.', 'Regreso est.',
-  'Profesional', 'Rol', 'Prestación', 'Comuna', 'Localidad',
-  'Dirección', 'Coordenadas', 'Paciente', 'RUT', 'Teléfono',
-  'Correo familia', 'Acompañantes',
-  'Dur. visita (min)', 'Traslado ida (min)', 'Traslado vuelta (min)',
-  'Distancia (km)', 'Total operativo (min)',
-  'Notif. correo prof.', 'Notif. WA prof.',
-  'Notif. correo coord.', 'Notif. WA coord.',
-  'Observaciones', 'Estado', 'Timestamp', 'Guardado en Sheets',
-  'Lat', 'Lng'
-];
+/* LAYOUT */
+.wrap{max-width:1000px;margin:0 auto;padding:22px 18px 60px;}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:11px;margin-bottom:18px;}
+.sc{background:var(--wh);border:1px solid var(--bdr);border-radius:var(--rl);padding:13px 16px;}
+.sc .lb{font-size:11px;color:var(--gm);font-weight:500;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+.sc .vl{font-size:13px;font-weight:500;}
+.sc .sb{font-size:11px;color:var(--gm);margin-top:2px;}
+.sc.al{background:var(--ap);border-color:#F0B27A;}
+.sc.al .lb{color:var(--amber);}
+
+/* CARDS */
+.card{background:var(--wh);border:1px solid var(--bdr);border-radius:var(--rl);overflow:hidden;margin-bottom:16px;}
+.ch{display:flex;align-items:center;gap:10px;padding:11px 20px;font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#fff;}
+.ch.c1{background:var(--navy);}
+.ch.c2{background:var(--blue);}
+.ch.c3{background:var(--teal);}
+.ch.c4{background:var(--navy);}
+.ch.chr{background:var(--navy);justify-content:space-between;}
+.snum{background:rgba(255,255,255,.15);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'IBM Plex Mono',monospace;flex-shrink:0;}
+.fb{padding:20px 22px;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;}
+.fc{grid-column:1/-1;}
+
+/* FIELDS */
+.f{display:flex;flex-direction:column;gap:5px;}
+.f label{font-size:12px;font-weight:500;color:var(--gd);}
+.req{color:var(--red);}
+.f input,.f select,.f textarea{border:1px solid var(--bdr);border-radius:var(--r);padding:8px 11px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;color:var(--tx);background:var(--wh);width:100%;transition:border-color .15s;}
+.f input:focus,.f select:focus,.f textarea:focus{outline:none;border-color:var(--bm);box-shadow:0 0 0 3px rgba(46,134,193,.12);}
+.f input[readonly]{background:var(--gp);cursor:default;}
+.f textarea{resize:vertical;min-height:66px;}
+.f .hint{font-size:11px;color:var(--gm);}
+
+/* PILLS */
+.pill{display:inline-block;padding:5px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--bdr);background:var(--gp);color:var(--gm);}
+.pill.on{background:var(--tp);color:var(--teal);border-color:var(--tl);}
+.pill.off{opacity:.45;}
+
+/* WARNINGS */
+.w{background:var(--ap);border:1px solid #F0B27A;border-radius:var(--r);padding:9px 13px;font-size:12px;color:var(--amber);margin-top:8px;}
+
+/* ESTABLECIMIENTOS */
+.ebox{background:var(--tp);border:1px solid var(--tl);border-radius:var(--rl);padding:13px;margin-top:13px;}
+.ebox h4{font-size:11px;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px;}
+.elist{display:flex;flex-direction:column;gap:5px;}
+.ei{display:flex;align-items:center;gap:9px;padding:7px 11px;background:var(--wh);border-radius:var(--r);border:1px solid var(--tl);cursor:pointer;transition:all .15s;}
+.ei:hover{background:var(--tp);border-color:var(--teal);}
+.ei.sel{background:var(--teal);color:#fff;border-color:var(--teal);}
+.ei .en{font-size:12px;font-weight:500;flex:1;}
+.et{font-size:10px;padding:2px 6px;border-radius:10px;font-weight:500;white-space:nowrap;}
+.et.hospital{background:#D6EAF8;color:#1A5276;}
+.et.posta{background:var(--tp);color:var(--teal);}
+.et.cesfam{background:var(--ap);color:var(--amber);}
+.et.cecosf{background:var(--pp);color:var(--pur);}
+.et.urgencia{background:var(--rp);color:var(--red);}
+.et.cosam,.et.rehab,.et.privado,.et.otro{background:var(--gp);color:var(--gm);}
+.ei.sel .et,.ei.sel .ed,.ei.sel .eg{color:rgba(255,255,255,.85)!important;background:rgba(255,255,255,.2)!important;border-color:transparent!important;}
+.ed{font-size:10px;color:var(--gm);font-family:'IBM Plex Mono',monospace;}
+.eg{font-size:10px;color:var(--bm);text-decoration:none;padding:2px 6px;border:1px solid var(--bl);border-radius:4px;white-space:nowrap;}
+
+/* COORDENADAS */
+.cz{background:var(--bp);border:1px solid var(--bl);border-radius:var(--rl);padding:13px;margin-top:13px;}
+.cz h4{font-size:12px;font-weight:600;color:var(--blue);margin-bottom:9px;}
+.cgrid{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end;}
+.cgrid input{border:1px solid var(--bl);border-radius:var(--r);padding:8px 11px;font-size:13px;font-family:'IBM Plex Mono',monospace;width:100%;}
+.cgrid input:focus{outline:none;border-color:var(--bm);}
+.bgo{padding:8px 15px;border-radius:var(--r);font-size:12px;font-weight:500;border:none;background:var(--bm);color:#fff;cursor:pointer;white-space:nowrap;}
+
+/* MAPA FORM */
+.mz{margin-top:14px;}
+.mc{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+.mst{font-size:12px;color:var(--gm);flex:1;}
+.bloc{padding:7px 13px;border-radius:var(--r);font-size:12px;font-weight:500;border:1px solid var(--bm);background:var(--bp);color:var(--blue);cursor:pointer;}
+.bloc:hover{background:var(--bm);color:#fff;}
+#map1{height:300px;border-radius:var(--rl);overflow:hidden;border:1px solid var(--bdr);background:var(--gp);}
+.rinfo{margin-top:6px;}
+.rbg{display:inline-flex;align-items:center;gap:5px;background:var(--tp);border:1px solid var(--tl);color:var(--teal);font-size:12px;font-weight:500;padding:4px 11px;border-radius:20px;}
+
+/* TIEMPOS */
+.tbox{background:var(--bp);border:1px solid var(--bl);border-radius:var(--rl);padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:12px;margin-top:14px;}
+.ti{text-align:center;}
+.tl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);font-weight:500;margin-bottom:3px;}
+.tv{font-size:20px;font-weight:600;color:var(--navy);font-family:'IBM Plex Mono',monospace;}
+.tv.hl{font-size:17px;color:var(--teal);}
+.tu{font-size:10px;color:var(--gm);}
+
+/* ACOMPAÑANTES */
+.az{background:var(--gp);border-radius:var(--rl);padding:13px;}
+.atog{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:500;}
+.atog input[type=checkbox]{width:16px;height:16px;accent-color:var(--teal);cursor:pointer;}
+.arow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-top:8px;}
+.arow input,.arow select{border:1px solid var(--bdr);border-radius:var(--r);padding:7px 10px;font-size:12px;font-family:'IBM Plex Sans',sans-serif;background:var(--wh);width:100%;}
+.bdel{background:none;border:none;color:var(--gl);cursor:pointer;font-size:16px;padding:3px 7px;border-radius:4px;}
+.bdel:hover{color:var(--red);background:var(--rp);}
+.badd{margin-top:9px;padding:6px 13px;border-radius:var(--r);font-size:12px;font-weight:500;border:1px dashed var(--tl);background:var(--tp);color:var(--teal);cursor:pointer;width:100%;text-align:center;}
+.badd:hover{background:var(--teal);color:#fff;}
+
+/* SEP */
+.sep{height:1px;background:var(--bdr);margin:16px 0;}
+.nlbl{font-size:11px;font-weight:600;color:var(--gm);text-transform:uppercase;letter-spacing:.06em;margin-bottom:11px;}
+
+/* ACTIONS */
+.acts{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px;border-top:1px solid var(--gp);background:var(--gp);}
+.btn{padding:9px 20px;border-radius:var(--r);font-size:13px;font-weight:500;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.bsec{background:var(--wh);border-color:var(--bdr);color:var(--gd);}
+.bsec:hover{background:var(--gp);}
+.bpri{background:var(--navy);color:#fff;}
+.bpri:hover{background:var(--blue);}
+.bexp{background:var(--teal);color:#fff;}
+.bexp:hover{opacity:.85;}
+.bshr{background:var(--bm);color:#fff;}
+.bshr:hover{opacity:.85;}
+
+/* HOJA RUTA */
+.hrcard{background:var(--wh);border:1px solid var(--bdr);border-radius:var(--rl);overflow:hidden;margin-bottom:16px;}
+.hrstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));}
+.hs{padding:13px 16px;text-align:center;border-right:1px solid var(--bdr);}
+.hs:last-child{border-right:none;}
+.hsl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gm);font-weight:500;margin-bottom:3px;}
+.hsv{font-size:20px;font-weight:600;color:var(--navy);font-family:'IBM Plex Mono',monospace;}
+.hrtl{padding:18px 20px;}
+.stop{display:grid;grid-template-columns:70px 1fr;}
+.stm{text-align:right;padding:11px 14px 11px 0;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;color:var(--navy);border-right:2px solid var(--bdr);position:relative;}
+.stm::after{content:'';position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:12px;height:12px;border-radius:50%;background:var(--wh);border:2px solid var(--bm);}
+.stop.so .stm::after{background:var(--navy);border-color:var(--navy);}
+.stop.sv .stm::after{background:var(--teal);border-color:var(--teal);}
+.stop.se .stm::after{background:var(--red);border-color:var(--red);}
+.stop.sg .stm::after{background:var(--gm);border-color:var(--gm);}
+.stb{padding:9px 0 9px 16px;}
+.stit{font-size:13px;font-weight:500;}
+.ssub{font-size:11px;color:var(--gm);margin-top:3px;}
+.leg{display:grid;grid-template-columns:70px 1fr;}
+.legl{border-right:2px dashed var(--bdr);}
+.legb{padding:3px 0 3px 16px;font-size:11px;color:var(--gm);}
+.errb{background:var(--rp);border-radius:var(--r);padding:5px 8px;}
+.hrwarn{padding:0 20px 14px;}
+.hwi{background:var(--rp);border:1px solid #F1948A;border-radius:var(--r);padding:9px 13px;font-size:12px;color:var(--red);margin-bottom:7px;}
+.hrbg{padding:4px 11px;border-radius:12px;font-size:12px;font-weight:500;}
+.hrok{background:var(--tp);color:var(--teal);border:1px solid var(--tl);}
+.hrerr{background:var(--rp);color:var(--red);border:1px solid #F1948A;}
+.bhr{padding:5px 13px;border-radius:var(--r);font-size:12px;font-weight:500;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;}
+.bhr:hover{background:rgba(255,255,255,.25);}
+
+/* EDIT INLINE */
+.ebtn{display:inline-flex;align-items:center;gap:3px;margin-left:7px;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500;border:1px solid var(--bl);background:var(--bp);color:var(--blue);cursor:pointer;vertical-align:middle;}
+.ebtn:hover{background:var(--bm);color:#fff;}
+.epanel{background:var(--wh);border:1px solid var(--bl);border-radius:var(--rl);padding:11px;margin-top:7px;}
+.epg{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;}
+.epg label{font-size:11px;font-weight:500;color:var(--gd);display:block;margin-bottom:3px;}
+.epg input{border:1px solid var(--bdr);border-radius:var(--r);padding:7px 10px;font-size:12px;width:100%;}
+.bes{padding:7px 13px;border-radius:var(--r);font-size:12px;font-weight:500;border:none;background:var(--teal);color:#fff;cursor:pointer;}
+.bec{padding:7px 9px;border-radius:var(--r);font-size:12px;border:1px solid var(--bdr);background:var(--wh);color:var(--gm);cursor:pointer;}
+
+/* RECORDS */
+.rh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.rcnt{background:var(--navy);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:4px 10px;border-radius:12px;}
+.rlist{display:flex;flex-direction:column;gap:7px;}
+.ri{background:var(--wh);border:1px solid var(--bdr);border-radius:var(--rl);padding:11px 16px;display:grid;grid-template-columns:auto 1fr auto auto auto auto auto;align-items:center;gap:11px;}
+.ri:hover{border-color:var(--bm);}
+.ri.ri-done{background:var(--tp);border-color:var(--tl);}
+.ri.ri-nodone{background:var(--rp);border-color:#F1948A;}
+.ri-estado{font-size:11px;font-family:'IBM Plex Sans',sans-serif;border-radius:12px;padding:4px 8px;border:1px solid var(--bdr);background:var(--wh);color:var(--gm);cursor:pointer;max-width:155px;}
+.ri-estado.est-pend{background:var(--gp);color:var(--gm);border-color:var(--bdr);}
+.ri-estado.est-done{background:var(--tp);color:var(--teal);border-color:var(--tl);font-weight:500;}
+.ri-estado.est-nodone{background:var(--rp);color:var(--red);border-color:#F1948A;font-weight:500;}
+.rnum{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gm);}
+.rinfo h4{font-size:13px;font-weight:500;}
+.rinfo p{font-size:11px;color:var(--gm);margin-top:2px;}
+.rbadge{font-size:11px;padding:3px 9px;border-radius:12px;font-weight:500;white-space:nowrap;}
+.bd{background:var(--bp);color:var(--blue);}
+.bm2{background:var(--tp);color:var(--teal);}
+.br2{background:var(--rp);color:var(--red);}
+.ba{background:var(--ap);color:var(--amber);}
+.bc{background:var(--pp);color:var(--pur);}
+.rtime{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--gm);}
+.rdel{background:none;border:none;color:var(--gl);cursor:pointer;font-size:15px;padding:2px 6px;border-radius:4px;}
+.rdel:hover{color:var(--red);background:var(--rp);}
+.empty{text-align:center;padding:32px;color:var(--gm);font-size:13px;}
+
+/* MAPA RUTA MODAL */
+.overlay{position:fixed;inset:0;background:rgba(13,43,69,.85);z-index:500;overflow-y:auto;padding:18px;}
+.modal{max-width:880px;margin:0 auto;background:var(--wh);border-radius:var(--rl);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.mhdr{background:var(--navy);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.mhdr-title{font-size:14px;font-weight:500;}
+.mhdr-btns{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.bmap{padding:6px 13px;border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;}
+.bmap:hover{background:rgba(255,255,255,.25);}
+.bmap.gmaps{background:#4285F4;border-color:#4285F4;}
+.bmap.close{font-size:16px;padding:4px 10px;}
+#map-ruta{height:400px;background:var(--gp);}
+.mleg{padding:9px 18px;background:#f8f9fa;border-bottom:1px solid var(--bdr);display:flex;gap:12px;flex-wrap:wrap;font-size:12px;align-items:center;}
+.mstops{padding:14px 18px;max-height:200px;overflow-y:auto;}
+.mstop{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--bdr);}
+.mstop:last-child{border-bottom:none;}
+.mnum{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;}
+.mtip{padding:10px 18px;background:var(--bp);font-size:12px;color:var(--blue);}
+
+/* SHARE MODAL */
+.shmodal{max-width:440px;margin:40px auto;background:var(--wh);border-radius:var(--rl);padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.shoption{padding:11px 14px;border-radius:var(--rl);border:1px solid var(--bdr);background:var(--wh);cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;width:100%;margin-bottom:9px;transition:border-color .15s;}
+.shoption:hover{border-color:var(--bm);background:var(--bp);}
+.shoption .icon{font-size:20px;flex-shrink:0;}
+.shoption .otit{font-size:13px;font-weight:600;color:var(--navy);}
+.shoption .osub{font-size:11px;color:var(--gm);margin-top:2px;}
+.shresult{padding:10px 13px;background:var(--tp);border-radius:var(--r);font-size:12px;color:var(--teal);margin-top:12px;}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;right:22px;background:var(--navy);color:#fff;padding:11px 18px;border-radius:var(--rl);font-size:13px;box-shadow:0 8px 24px rgba(13,43,69,.25);transform:translateY(80px);opacity:0;transition:all .3s;z-index:9999;pointer-events:none;}
+.toast.on{transform:translateY(0);opacity:1;}
+
+/* PRINT */
+@media print{
+  header,.strip,.card:not(.hrcard),.rh,.rlist,#modal-wrapper,#share-wrapper,.acts{display:none!important;}
+  .hrcard{display:block!important;box-shadow:none;border:none;}
+  .ch,.hrstats,.hrtl,.hrwarn{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  body{background:#fff;}
+}
+@media(max-width:680px){
+  .g2,.g3,.g4,.cgrid{grid-template-columns:1fr;}
+  .fc{grid-column:1;}
+  .cgrid button{grid-column:1/-1;}
+  #map1{height:240px;}
+  #map-ruta{height:260px;}
+  .hi{padding:11px 14px;}
+  .wrap{padding:12px 12px 50px;}
+  .mhdr{flex-direction:column;align-items:flex-start;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hi">
+    <div class="logo">CSMC</div>
+    <div><h1>Sistema Logístico Móvil — Chanco</h1><div class="sub">Coordinación de visitas domiciliarias y prestaciones en terreno</div></div>
+    <div class="hbadge no" id="hbadge"><span class="dot"></span><span id="hbadge-txt">Móvil no disponible ahora</span></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div id="sync-banner" style="display:none;align-items:center;gap:10px;background:var(--ap);border:1px solid #F0B27A;border-radius:var(--rl);padding:10px 16px;margin-bottom:14px;font-size:13px;color:var(--amber);">
+    <span style="font-size:16px;">⚠</span>
+    <span class="sb-txt" style="flex:1;">0 visita(s) sin sincronizar con Sheets</span>
+    <button onclick="reintentarTodo()" style="padding:5px 12px;border-radius:var(--r);font-size:12px;font-weight:500;border:1px solid var(--amber);background:var(--wh);color:var(--amber);cursor:pointer;">↻ Reintentar ahora</button>
+  </div>
+
+  <div class="strip">
+    <div class="sc"><div class="lb">Ventanas horarias</div><div class="vl">Lun · Mié</div><div class="sb">Lun 10:00–16:00 · Mié 09:15–12:45 y 14:45–17:30</div></div>
+    <div class="sc"><div class="lb">Territorio</div><div class="vl">Chanco · Pelluhue · Cauquenes</div><div class="sb">Máx. 60 min traslado ida</div></div>
+    <div class="sc"><div class="lb">Hoy</div><div class="vl" id="s-fecha">—</div><div class="sb" id="s-hora">—</div></div>
+    <div class="sc al"><div class="lb">⚠ Sesión actual</div><div class="vl" id="s-nreg">0</div><div class="sb">visitas agendadas</div></div>
+    <div class="sc" id="sc-sync" style="border-color:#A9DFBF;background:#E9F7EF;display:none;"><div class="lb" style="color:#0E6655;">☁ Google Sheets</div><div class="vl" id="sync-status" style="color:#0E6655;">Conectado</div><div class="sb" id="sync-sub">Guardado automático activo</div></div>
+  </div>
+
+  <!-- PANEL PRIORIZACION -->
+  <div style="background:#fff;border:1px solid #D5DBDB;border-radius:10px;overflow:hidden;margin-bottom:16px;">
+    <div style="background:#0D2B45;color:#fff;padding:11px 20px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="togglePrio()">
+      <span style="font-size:14px;">📋</span>
+      <span style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;">Criterios de priorización del móvil</span>
+      <span style="margin-left:auto;font-size:13px;" id="prio-arrow">▼</span>
+    </div>
+    <div id="prio-panel" style="padding:16px 20px;display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+        <div style="background:#EBF5FB;border-left:4px solid #2E86C1;border-radius:6px;padding:12px 14px;">
+          <div style="font-size:10px;font-weight:700;color:#1A5276;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Prioridad de uso del móvil</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <span style="background:#0D2B45;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-top:1px;">P1</span>
+              <span style="font-size:12px;color:#1A252F;">Actividades calendarizadas · Medicamentos · Actividades comunitarias</span>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <span style="background:#1A5276;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-top:1px;">P2</span>
+              <span style="font-size:12px;color:#1A252F;">Visitas domiciliarias integrales</span>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <span style="background:#2E86C1;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-top:1px;">P3</span>
+              <span style="font-size:12px;color:#1A252F;">Rescate pacientes no adherentes · Firmas · Gestiones</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#E9F7EF;border-left:4px solid #0E6655;border-radius:6px;padding:12px 14px;">
+          <div style="font-size:10px;font-weight:700;color:#0E6655;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Priorización dentro de visitas domiciliarias</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <span style="background:#0E6655;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-top:1px;">P1</span>
+              <span style="font-size:12px;color:#1A252F;">Gravedad clínica del paciente</span>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <span style="background:#148A68;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-top:1px;">P2</span>
+              <span style="font-size:12px;color:#1A252F;">Optimización de ruta (cercanía geográfica)</span>
+            </div>
+          </div>
+          <div style="margin-top:10px;padding:8px 10px;background:rgba(14,102,85,.08);border-radius:5px;font-size:11px;color:#0E6655;">
+            💡 Primero se atiende al paciente más grave, luego se ordena por ruta para optimizar el tiempo del móvil.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SEC 1 -->
+  <div class="card">
+    <div class="ch c1"><span class="snum">1</span>Datos generales de la visita</div>
+    <div class="fb">
+      <div class="g3">
+        <div class="f"><label>Fecha <span class="req">*</span></label><input type="date" id="f1" onchange="onFecha()"></div>
+        <div class="f"><label>Día</label><input type="text" id="f2" readonly></div>
+        <div class="f"><label>Hora de salida <span class="req">*</span></label><input type="time" id="f3" oninput="calcT()"></div>
+      </div>
+      <div style="margin-top:13px;">
+        <div style="font-size:12px;font-weight:500;color:var(--gd);margin-bottom:6px;">Franja horaria disponible</div>
+        <div id="franjas" style="display:flex;gap:7px;flex-wrap:wrap;"><span class="pill off">Selecciona una fecha primero</span></div>
+        <div class="w" id="w1" style="display:none;">⚠ La hora está fuera de la ventana horaria autorizada.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEC 2 -->
+  <div class="card">
+    <div class="ch c2"><span class="snum">2</span>Profesional y tipo de prestación</div>
+    <div class="fb">
+      <div class="g2">
+        <div class="f"><label>Nombre del profesional <span class="req">*</span></label><input type="text" id="f4" placeholder="Nombre completo"></div>
+        <div class="f"><label>Rol / Cargo <span class="req">*</span></label>
+          <select id="f5" onchange="onPrest()">
+            <option value="">— Seleccionar —</option>
+            <option>Psicólogo/a</option><option>Terapeuta Ocupacional</option>
+            <option>Enfermero/a</option><option>Trabajador/a Social</option>
+            <option>Psicopedagoga</option><option>Fonoaudiólogo/a</option><option>TENS</option>
+          </select>
+        </div>
+        <div class="f fc"><label>Tipo de prestación <span class="req">*</span></label>
+          <select id="f6" onchange="onPrest()">
+            <option value="">— Seleccionar —</option>
+            <option value="Visita domiciliaria profesional" data-m="45">Visita domiciliaria profesional (45 min)</option>
+            <option value="Entrega y/o administración de medicamentos" data-m="20">Entrega / administración de medicamentos — TENS (20 min)</option>
+            <option value="Visita de rescate" data-m="30">Visita de rescate (30 min)</option>
+            <option value="Visita administrativa" data-m="30">Visita administrativa (30 min)</option>
+            <option value="Actividad comunitaria" data-m="120">Actividad comunitaria (120 min)</option>
+            <option value="Coordinación con el intersector" data-m="60">Coordinación con el intersector (60 min)</option>
+          </select>
+        </div>
+      </div>
+      <div class="w" id="w2" style="display:none;margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- SEC 3 -->
+  <div class="card">
+    <div class="ch c3"><span class="snum">3</span>Destino, mapa y tiempos reales de ruta</div>
+    <div class="fb">
+      <div class="g2">
+        <div class="f"><label>Comuna <span class="req">*</span></label>
+          <select id="f7" onchange="onComuna()">
+            <option value="">— Seleccionar —</option>
+            <option value="chanco">Chanco</option>
+            <option value="pelluhue">Pelluhue</option>
+            <option value="cauquenes">Cauquenes</option>
+          </select>
+        </div>
+        <div class="f"><label>Sector / Localidad <span class="req">*</span></label>
+          <select id="f8" onchange="onLocalidad()" disabled>
+            <option value="">— Primero selecciona comuna —</option>
+          </select>
+        </div>
+        <div class="f"><label>Dirección exacta / referencia</label><input type="text" id="f9" placeholder="Calle, número, sector..."></div>
+        <div class="f"><label>Dirección en mapa (solo lectura)</label><input type="text" id="f10" readonly placeholder="Se llena al seleccionar destino"></div>
+      </div>
+
+      <div class="ebox" id="ebox" style="display:none;">
+        <h4>🏥 Establecimientos Minsal — datos oficiales feb. 2026</h4>
+        <div class="elist" id="elist"></div>
+      </div>
+
+      <div class="cz">
+        <h4>📍 Ingresar coordenadas manualmente</h4>
+        <div class="cgrid">
+          <div class="f" style="gap:4px;"><label style="font-size:11px;">Latitud</label><input type="text" id="clat" placeholder="-35.7283" oninput="onCoord(this)"></div>
+          <div class="f" style="gap:4px;"><label style="font-size:11px;">Longitud</label><input type="text" id="clng" placeholder="-72.5353" oninput="onCoord(this)"></div>
+          <button class="bgo" onclick="irCoord()">📍 Ir al punto</button>
+        </div>
+        <div style="font-size:11px;color:var(--gm);margin-top:6px;">💡 Pega coordenadas tipo <strong>-35.7283, -72.5353</strong> en cualquier campo y ambos se completarán solos.</div>
+      </div>
+
+      <div class="mz">
+        <div class="mc">
+          <button class="bloc" onclick="usarGPS()">📱 Usar mi ubicación actual</button>
+          <span class="mst" id="mst">Selecciona una localidad o ingresa coordenadas</span>
+        </div>
+        <div id="map1"></div>
+        <div class="rinfo" id="rinfo"></div>
+      </div>
+
+      <div class="tbox">
+        <div class="ti"><div class="tl">Traslado ida</div><div class="tv" id="tida">—</div><div class="tu">min</div></div>
+        <div class="ti"><div class="tl">Visita efectiva</div><div class="tv" id="tvis">—</div><div class="tu">min</div></div>
+        <div class="ti"><div class="tl">Traslado vuelta</div><div class="tv" id="tvta">—</div><div class="tu">min</div></div>
+        <div class="ti"><div class="tl">Total operativo</div><div class="tv" id="ttot">—</div><div class="tu">min</div></div>
+        <div class="ti"><div class="tl">Llegada est.</div><div class="tv hl" id="tll">—</div></div>
+        <div class="ti"><div class="tl">Regreso est.</div><div class="tv hl" id="trg">—</div></div>
+      </div>
+      <div class="w" id="w3" style="display:none;margin-top:8px;">⚠ El tiempo total excede la ventana horaria disponible.</div>
+    </div>
+  </div>
+
+  <!-- SEC 4 -->
+  <div class="card">
+    <div class="ch c4"><span class="snum">4</span>Datos del usuario / contacto y notificaciones</div>
+    <div class="fb">
+      <div class="g3">
+        <div class="f fc"><label>Paciente / Lugar de actividad <span class="req">*</span></label><input type="text" id="f11" placeholder="Nombre del paciente o lugar de actividad comunitaria"></div>
+        <div class="f"><label>RUT (opcional)</label><input type="text" id="f12" placeholder="12.345.678-9"></div>
+        <div class="f"><label>Teléfono / familiar</label><input type="text" id="f13" placeholder="+569 XXXX XXXX"></div>
+        <div class="f"><label>Correo familia</label><input type="email" id="f14" placeholder="correo@ejemplo.cl"></div>
+      </div>
+      <div class="sep"></div>
+      <div class="nlbl">📬 Destinatarios de notificación (Make / automatización)</div>
+      <div class="g4">
+        <div class="f"><label>Correo — profesional</label><input type="email" id="f15" placeholder="prof@csmc.cl"></div>
+        <div class="f"><label>WhatsApp — profesional</label><input type="text" id="f16" placeholder="+569 XXXX XXXX"></div>
+        <div class="f"><label>Correo — coordinación</label><input type="email" id="f17" placeholder="coord@csmc.cl"></div>
+        <div class="f"><label>WhatsApp — coordinación</label><input type="text" id="f18" placeholder="+569 XXXX XXXX"></div>
+      </div>
+      <div class="sep"></div>
+      <div class="nlbl">👥 Acompañantes en la visita</div>
+      <div class="az">
+        <label class="atog"><input type="checkbox" id="fsa" onchange="toggleAcomp(this)"> Sin acompañante</label>
+        <div id="alist"></div>
+        <button class="badd" id="badd" onclick="addAcomp()">+ Agregar acompañante</button>
+      </div>
+      <div class="sep"></div>
+      <div class="f"><label>Observaciones</label><textarea id="f19" placeholder="Indicaciones especiales, acceso, motivo de visita..."></textarea></div>
+    </div>
+    <div class="acts">
+      <button class="btn bsec" onclick="limpiar()">Limpiar</button>
+      <button class="btn bexp" onclick="exportXL()">⬇ Excel</button>
+      <button class="btn bpri" onclick="registrar()">Registrar visita →</button>
+    </div>
+  </div>
+
+  <!-- HOJA DE RUTA -->
+  <div class="hrcard" id="hrcard" style="display:none;">
+    <div class="ch chr">
+      <div style="display:flex;align-items:center;gap:10px;"><span class="snum">🗺</span>Hoja de ruta del día — <span id="hr-fecha">—</span></div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+        <span class="hrbg hrok" id="hr-badge">✓ Ruta viable</span>
+        <button class="bhr" onclick="verMapaRuta()">🗺 Ver en mapa</button>
+        <button class="bhr" onclick="abrirShare()">📤 Compartir</button>
+        <button class="bhr" onclick="exportXL()">⬇ Excel</button>
+      </div>
+    </div>
+    <div class="hrstats">
+      <div class="hs"><div class="hsl">Partida</div><div class="hsv" id="hr-part">—</div></div>
+      <div class="hs"><div class="hsl">Regreso est.</div><div class="hsv" id="hr-reg">—</div></div>
+      <div class="hs"><div class="hsl">Visitas</div><div class="hsv" id="hr-n">—</div></div>
+      <div class="hs"><div class="hsl">Km totales</div><div class="hsv" id="hr-km">—</div></div>
+      <div class="hs"><div class="hsl">Tiempo total</div><div class="hsv" id="hr-tt">—</div></div>
+    </div>
+    <div class="hrtl" id="hrtl"></div>
+    <div class="hrwarn" id="hrwarn"></div>
+  </div>
+
+  <!-- REGISTROS -->
+  <div class="rh">
+    <div style="font-size:14px;font-weight:500;">Visitas agendadas (sesión actual)</div>
+    <div class="rcnt" id="rcnt">0</div>
+  </div>
+  <div class="empty" id="rempty">No hay visitas registradas en esta sesión.</div>
+  <div class="rlist" id="rlist"></div>
+
+</div><!-- /wrap -->
+
+<!-- MODAL MAPA RUTA -->
+<div id="modal-wrapper" style="display:none;position:fixed;inset:0;background:rgba(13,43,69,.85);z-index:500;overflow-y:auto;padding:16px;">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mhdr-title">🗺 Ruta completa del día — <span id="mr-fecha">—</span></div>
+      <div class="mhdr-btns">
+        <button class="bmap" onclick="copiarGMaps()">📋 Copiar enlace Maps</button>
+        <button class="bmap gmaps" onclick="abrirGMaps()">↗ Abrir en Google Maps</button>
+        <button class="bmap close" onclick="cerrarMapaRuta()">✕</button>
+      </div>
+    </div>
+    <div class="mleg" id="mr-leg"></div>
+    <div id="map-ruta" style="height:400px;background:var(--gp);"></div>
+    <div class="mstops" id="mr-stops"></div>
+    <div class="mtip">💡 <strong>Tip:</strong> Copia el enlace de Google Maps y pégalo en WhatsApp — tus colegas verán la ruta navegable completa en su celular.</div>
+  </div>
+</div>
+
+<!-- MODAL COMPARTIR -->
+<div id="share-wrapper" style="display:none;position:fixed;inset:0;background:rgba(13,43,69,.75);z-index:500;overflow-y:auto;padding:16px;">
+  <div class="shmodal">
+    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:5px;">📤 Compartir hoja de ruta</div>
+    <div style="font-size:12px;color:var(--gm);margin-bottom:18px;">Elige cómo compartir con tu equipo</div>
+    <button class="shoption" onclick="compartirGMaps()">
+      <span class="icon">🗺</span>
+      <div><div class="otit">Enlace Google Maps</div><div class="osub">Copia la ruta completa con todas las paradas — pégalo en WhatsApp o correo</div></div>
+    </button>
+    <button class="shoption" onclick="compartirTexto()">
+      <span class="icon">📝</span>
+      <div><div class="otit">Resumen en texto (WhatsApp)</div><div class="osub">Texto formateado con horarios y direcciones listo para pegar</div></div>
+    </button>
+    <button class="shoption" onclick="compartirExcel()">
+      <span class="icon">📊</span>
+      <div><div class="otit">Exportar Excel</div><div class="osub">Descarga el archivo y adjúntalo en correo o sube a Drive</div></div>
+    </button>
+    <button class="shoption" onclick="imprimirPDF()">
+      <span class="icon">🖨</span>
+      <div><div class="otit">Imprimir / Guardar PDF</div><div class="osub">Ctrl+P → Guardar como PDF para tener copia imprimible</div></div>
+    </button>
+    <div class="shresult" id="shresult" style="display:none;"></div>
+    <button onclick="cerrarShare()" style="margin-top:14px;width:100%;padding:9px;border-radius:var(--r);font-size:13px;border:1px solid var(--bdr);background:var(--gp);color:var(--gm);cursor:pointer;">Cerrar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// DATOS CONSTANTES
+// ============================================================
+var DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var ORIGEN = {lat:-35.7283, lng:-72.5353};
+var HOSPITAL = {lat:-35.73956, lng:-72.53145, n:'Hospital Dr. Benjamín Pedreros'};
+var VENTANAS = {
+  1:[{ini:'10:00',fin:'16:00',lbl:'Lunes 10:00–16:00'}],
+  3:[{ini:'09:15',fin:'12:45',lbl:'Miércoles 09:15–12:45'},{ini:'14:45',fin:'17:30',lbl:'Miércoles 14:45–17:30'}]
+};
+var SECTORES = {
+  chanco:[{v:'Chanco Centro',lat:-35.7283,lng:-72.5353},{v:'Chanco Norte',lat:-35.715,lng:-72.538},{v:'Chanco Sur',lat:-35.742,lng:-72.533},{v:'Loanco',lat:-35.5894,lng:-72.6099},{v:'Pahuil',lat:-35.6173,lng:-72.569},{v:'Quilhuine',lat:-35.5936,lng:-72.5282},{v:'El Colo',lat:-35.6445,lng:-72.4932},{v:'El Cardonal',lat:-35.7172,lng:-72.422},{v:'Lagunillas',lat:-35.7704,lng:-72.4552},{v:'La Vega',lat:-35.8756,lng:-72.445},{v:'Sector rural Chanco',lat:-35.756,lng:-72.56}],
+  pelluhue:[{v:'Pelluhue Centro',lat:-35.8113,lng:-72.5729},{v:'Curanipe',lat:-35.8465,lng:-72.6356},{v:'Chovellén',lat:-35.9151,lng:-72.6661},{v:'Pelluhue Norte',lat:-35.8,lng:-72.565},{v:'Pelluhue Sur',lat:-35.83,lng:-72.575},{v:'Sector rural Pelluhue',lat:-35.845,lng:-72.582}],
+  cauquenes:[{v:'Cauquenes Centro',lat:-35.9631,lng:-72.3253},{v:'Pilén',lat:-35.9813,lng:-72.4544},{v:'Cayurranquil',lat:-35.9711,lng:-72.5523},{v:'Santa Sofía',lat:-35.9672,lng:-72.356},{v:'Tapihue',lat:-35.7727,lng:-72.3035},{v:'Sauzal',lat:-35.7213,lng:-72.1265},{v:'Quella',lat:-36.0576,lng:-72.0912},{v:'Pocillas',lat:-36.1617,lng:-72.2311},{v:'Tres Esquinas',lat:-36.1442,lng:-72.2937},{v:'Coronel',lat:-36.0529,lng:-72.4553},{v:'Cancha de Los Huevos',lat:-36.097,lng:-72.4737},{v:'Santo Toribio',lat:-35.8341,lng:-72.0333}]
+};
+var ESTABL = {
+  chanco:[
+    {n:'Hospital Dr. Benjamín Pedreros',t:'hospital',lat:-35.73956,lng:-72.53145,d:'Avda. Padre Rolando Escobar',g:'https://www.google.cl/maps/dir//-35.73956,-72.53145'},
+    {n:'Posta de Salud Rural La Vega',t:'posta',lat:-35.87561,lng:-72.44503,d:'Aldea La Vega',g:'https://www.google.cl/maps/dir//-35.87561,-72.44503'},
+    {n:'Posta de Salud Rural Lagunillas',t:'posta',lat:-35.770361,lng:-72.455236,d:'Caserío Lagunillas',g:'https://www.google.cl/maps/dir//-35.770361,-72.455236'},
+    {n:'Posta de Salud Rural El Cardonal',t:'posta',lat:-35.71719,lng:-72.42204,d:'Sector El Cardonal',g:'https://www.google.cl/maps/dir//-35.71719,-72.42204'},
+    {n:'Posta de Salud Rural El Colo',t:'posta',lat:-35.64451,lng:-72.49323,d:'Sector El Colo',g:'https://www.google.cl/maps/dir//-35.64451,-72.49323'},
+    {n:'Posta de Salud Rural Pahuil',t:'posta',lat:-35.61727,lng:-72.56903,d:'Aldea Pahuil',g:'https://www.google.cl/maps/dir//-35.61727,-72.56903'},
+    {n:'Posta de Salud Rural Quilhuine',t:'posta',lat:-35.59355,lng:-72.52816,d:'Caserío Quilhuine',g:'https://www.google.cl/maps/dir//-35.59355,-72.52816'},
+    {n:'Posta de Salud Rural Loanco',t:'posta',lat:-35.58938,lng:-72.60991,d:'Sector Loanco',g:'https://www.google.cl/maps/dir//-35.58938,-72.60991'}
+  ],
+  pelluhue:[
+    {n:'CESFAM Dr. Pedro Rivas Pinochet',t:'cesfam',lat:-35.84645,lng:-72.63561,d:'Calle Comercio, Curanipe',g:'https://www.google.cl/maps/dir//-35.84645,-72.63561'},
+    {n:'SUR Curanipe',t:'urgencia',lat:-35.846509,lng:-72.635572,d:'Calle Comercio, Curanipe',g:'https://www.google.cl/maps/dir//-35.846509,-72.635572'},
+    {n:'CECOSF Pelluhue',t:'cecosf',lat:-35.81126,lng:-72.57287,d:'Abdón Fuentealba, Pelluhue',g:'https://www.google.cl/maps/dir//-35.81126,-72.57287'},
+    {n:'Posta de Salud Rural Chovellén',t:'posta',lat:-35.915099,lng:-72.666053,d:'Aldea Chovellén',g:'https://www.google.cl/maps/dir//-35.915099,-72.666053'}
+  ],
+  cauquenes:[
+    {n:'Hospital San Juan de Dios Cauquenes',t:'hospital',lat:-35.963105,lng:-72.32527,d:'Calle Manuel Montt',g:'https://www.google.cl/maps/dir//-35.963105,-72.32527'},
+    {n:'CESFAM Armando Williams',t:'cesfam',lat:-35.98253,lng:-72.31324,d:'Calle Padre Hurtado',g:'https://www.google.cl/maps/dir//-35.98253,-72.31324'},
+    {n:'CESFAM Dr. Ricardo Valdés Hurtado',t:'cesfam',lat:-35.9504,lng:-72.3466,d:'Camino a Chanco Km. 4',g:'https://www.google.cl/maps/dir//-35.9504,-72.3466'},
+    {n:'SAR Dr. Juan Saavedra Macaya',t:'urgencia',lat:-35.964271,lng:-72.317408,d:'Calle Balmaceda 680',g:'https://www.google.cl/maps/dir//-35.964271,-72.317408'},
+    {n:'COSAM Cauquenes',t:'cosam',lat:-35.9632909,lng:-72.324946,d:'Calle Manuel Montt',g:'https://www.google.cl/maps/dir//-35.9632909,-72.324946'},
+    {n:'Centro de Rehabilitación Integral',t:'rehab',lat:-35.967928,lng:-72.310176,d:'Manso de Velasco 220',g:'https://www.google.cl/maps/dir//-35.967928,-72.310176'},
+    {n:"CECOSF Rosita O'Higgins",t:'cecosf',lat:-35.9621,lng:-72.33618,d:"Pob. Rosita O'Higgins 24",g:'https://www.google.cl/maps/dir//-35.9621,-72.33618'},
+    {n:'CECOSF Población Fernández',t:'cecosf',lat:-35.95794,lng:-72.29983,d:'Camino a Parral',g:'https://www.google.cl/maps/dir//-35.95794,-72.29983'},
+    {n:'Posta de Salud Rural Pocillas',t:'posta',lat:-36.16172,lng:-72.23107,d:'Caserío Pocillas',g:'https://www.google.cl/maps/dir//-36.16172,-72.23107'},
+    {n:'Posta de Salud Rural Tres Esquinas',t:'posta',lat:-36.14417,lng:-72.29366,d:'Caserío Tres Esquinas',g:'https://www.google.cl/maps/dir//-36.14417,-72.29366'},
+    {n:'Posta de Salud Rural Coronel',t:'posta',lat:-36.05285,lng:-72.45526,d:'Caserío Coronel',g:'https://www.google.cl/maps/dir//-36.05285,-72.45526'},
+    {n:'Posta de Salud Rural Cancha de Los Huevos',t:'posta',lat:-36.09699,lng:-72.47368,d:'Sector Cancha de los Huevos',g:'https://www.google.cl/maps/dir//-36.09699,-72.47368'},
+    {n:'Posta de Salud Rural Quella',t:'posta',lat:-36.057582,lng:-72.091152,d:'Aldea Quella',g:'https://www.google.cl/maps/dir//-36.057582,-72.091152'},
+    {n:'Posta de Salud Rural Santa Sofía',t:'posta',lat:-35.96715,lng:-72.35595,d:'Aldea Santa Sofía',g:'https://www.google.cl/maps/dir//-35.96715,-72.35595'},
+    {n:'Posta de Salud Rural Pilén',t:'posta',lat:-35.98133,lng:-72.45443,d:'Caserío Pilén Bajo',g:'https://www.google.cl/maps/dir//-35.98133,-72.45443'},
+    {n:'Posta de Salud Rural Cayurranquil',t:'posta',lat:-35.971063,lng:-72.552306,d:'Sector Cayurranquil',g:'https://www.google.cl/maps/dir//-35.971063,-72.552306'},
+    {n:'Posta de Salud Rural Tapihue',t:'posta',lat:-35.772709,lng:-72.303509,d:'Sector Tapihue',g:'https://www.google.cl/maps/dir//-35.772709,-72.303509'},
+    {n:'Posta de Salud Rural Sauzal',t:'posta',lat:-35.721347,lng:-72.126494,d:'Aldea Sauzal',g:'https://www.google.cl/maps/dir//-35.721347,-72.126494'},
+    {n:'Posta de Salud Rural Santo Toribio',t:'posta',lat:-35.834129,lng:-72.033336,d:'Sector Santo Toribio',g:'https://www.google.cl/maps/dir//-35.834129,-72.033336'}
+  ]
+};
+var PREST_BADGE = {
+  'Visita domiciliaria profesional':['bd','Domiciliaria'],
+  'Entrega y/o administración de medicamentos':['bm2','Medicamentos'],
+  'Visita de rescate':['br2','Rescate'],
+  'Visita administrativa':['ba','Administrativa'],
+  'Actividad comunitaria':['bc','Comunitaria'],
+  'Coordinación con el intersector':['bd','Intersector']
+};
+var ROLES_AC = ['Psicólogo/a','Terapeuta Ocupacional','Enfermero/a','Trabajador/a Social','Psicopedagoga','Fonoaudiólogo/a','TENS','Conductor','Administrativo/a','Estudiante en práctica','Otro'];
 
 // ============================================================
-// doGet
+// ESTADO
 // ============================================================
-function doGet(e) {
+var registros = [];
+// ← PEGA AQUI tu URL de Google Apps Script después de desplegarlo
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwJHWAOo1MFWJKNKPutJBNj35U1wLqaoTTChx_xr8qPCTCK-4zUTC_6m-5cijGawOEM/exec';
+var mapa1 = null;
+var mOrigen1 = null;
+var mDest1 = null;
+var mRuta1 = null;
+var mapaR = null;
+var origenAct = {lat:ORIGEN.lat, lng:ORIGEN.lng};
+var destAct = null;
+var tIdaAct = null;
+var distAct = null;
+var acCnt = 0;
+
+// ============================================================
+// PERSISTENCIA LOCAL (localStorage) — evita perder visitas
+// si se pierde la conexion antes de sincronizar con Sheets
+// ============================================================
+function persistRegistros() {
+  try { localStorage.setItem('csmc_registros', JSON.stringify(registros)); }
+  catch(e) {}
+}
+
+function cargarRegistrosLocal() {
   try {
-    var p = e.parameter || {};
-
-    if (p.accion === 'cargar') {
-      var visitas = cargarVisitasPendientes(p.desde);
-      return jsonp(p.callback, {ok: true, visitas: visitas});
+    var raw = localStorage.getItem('csmc_registros');
+    if (!raw) return;
+    var arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length) {
+      registros = arr;
+      registros.forEach(function(r,i){ r.id = i+1; });
     }
-
-    if (p.accion === 'actualizar') {
-      var ok = actualizarEstadoPorTimestamp(p.timestamp, p.estado);
-      return jsonp(p.callback, {ok: ok});
-    }
-
-    if (p.fecha || p.accion === 'nueva') {
-      var fila = guardarVisita(p);
-      if (p.notifCorreoProf || p.notifCorreoCoord) enviarEmail(p);
-      return jsonp(p.callback, {ok: true, fila: fila});
-    }
-
-    return jsonp(p.callback, {ok: true, msg: 'CSMC Chanco API v6 activa'});
-
-  } catch(err) {
-    registrarError('doGet', err.toString(), JSON.stringify(e.parameter||{}));
-    return jsonp((e.parameter||{}).callback, {ok: false, error: err.toString()});
-  }
-}
-
-function doPost(e) {
-  try {
-    var data = e.parameter || {};
-    if (e.postData && e.postData.type === 'application/json') {
-      data = JSON.parse(e.postData.contents);
-    }
-    if (data.accion === 'actualizar') {
-      var ok = actualizarEstadoPorTimestamp(data.timestamp, data.estado);
-      return ContentService.createTextOutput(JSON.stringify({ok: ok}))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-    var fila = guardarVisita(data);
-    if (data.notifCorreoProf || data.notifCorreoCoord) enviarEmail(data);
-    return ContentService
-      .createTextOutput(JSON.stringify({ok:true, fila:fila}))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ok:false, error:err.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function jsonp(callback, data) {
-  var json = JSON.stringify(data);
-  var output = callback ? callback + '(' + json + ');' : json;
-  return ContentService
-    .createTextOutput(output)
-    .setMimeType(ContentService.MimeType.JAVASCRIPT);
-}
-
-// ============================================================
-// ACTUALIZAR ESTADO POR TIMESTAMP
-// ============================================================
-function actualizarEstadoPorTimestamp(timestamp, nuevoEstado) {
-  if (!timestamp || !nuevoEstado) return false;
-  var ss   = SpreadsheetApp.openById(SHEET_ID);
-  var hoja = ss.getSheetByName(HOJA_VISITAS);
-  if (!hoja) return false;
-
-  var datos = hoja.getDataRange().getValues();
-  if (datos.length < 2) return false;
-
-  var headerRow = datos[0];
-  var col = {};
-  headerRow.forEach(function(h, idx) { col[String(h).trim()] = idx; });
-
-  var colTs  = col['Timestamp'];
-  var colEst = col['Estado'];
-  if (colTs === undefined || colEst === undefined) return false;
-
-  for (var i = 1; i < datos.length; i++) {
-    if (String(datos[i][colTs]).trim() === String(timestamp).trim()) {
-      var celda = hoja.getRange(i+1, colEst+1);
-      celda.setValue(nuevoEstado);
-      var color = '#FAD7A0'; // Agendada (amarillo suave)
-      if (nuevoEstado === 'Realizada') color = '#A9DFBF';
-      else if (nuevoEstado.indexOf('No realizada') === 0) color = '#F1948A';
-      celda.setBackground(color).setFontWeight('bold');
-      return true;
-    }
-  }
-  return false;
-}
-
-// ============================================================
-// CARGAR VISITAS PENDIENTES (fecha >= hoy, estado != Cancelada)
-// ============================================================
-function cargarVisitasPendientes(desde) {
-  var ss   = SpreadsheetApp.openById(SHEET_ID);
-  var hoja = ss.getSheetByName(HOJA_VISITAS);
-  if (!hoja) return [];
-
-  var datos = hoja.getDataRange().getValues();
-  if (datos.length < 2) return [];
-
-  var headerRow = datos[0];
-  var col = {};
-  headerRow.forEach(function(h, idx) { col[String(h).trim()] = idx; });
-
-  var fechaDesde = desde || Utilities.formatDate(new Date(), 'America/Santiago', 'yyyy-MM-dd');
-
-  var visitas = [];
-  for (var i = 1; i < datos.length; i++) {
-    var fila = datos[i];
-    if (!fila[col['Fecha']] && !fila[col['Paciente']]) continue;
-
-    var fechaFila = normalizarFecha(fila[col['Fecha']]);
-    if (!fechaFila) continue;
-    if (fechaFila < fechaDesde) continue;
-
-    var estado = String(fila[col['Estado']]||'').trim();
-    if (estado === 'Cancelada') continue;
-
-    visitas.push({
-      fecha:           fechaFila,
-      dia:             g(fila, col, 'Día'),
-      horaSalida:      g(fila, col, 'Hora salida'),
-      horaLlegadaEst:  g(fila, col, 'Llegada est.'),
-      horaRegresoEst:  g(fila, col, 'Regreso est.'),
-      profesional:     g(fila, col, 'Profesional'),
-      rol:             g(fila, col, 'Rol'),
-      prestacion:      g(fila, col, 'Prestación'),
-      comuna:          g(fila, col, 'Comuna'),
-      localidad:       g(fila, col, 'Localidad'),
-      direccion:       g(fila, col, 'Dirección'),
-      coordenadas:     g(fila, col, 'Coordenadas'),
-      lat:             g(fila, col, 'Lat'),
-      lng:             g(fila, col, 'Lng'),
-      paciente:        g(fila, col, 'Paciente'),
-      rut:             g(fila, col, 'RUT'),
-      telefono:        g(fila, col, 'Teléfono'),
-      correoFamilia:   g(fila, col, 'Correo familia'),
-      acompanantes:    g(fila, col, 'Acompañantes'),
-      duracionVisita:  g(fila, col, 'Dur. visita (min)'),
-      trasladoIda:     g(fila, col, 'Traslado ida (min)'),
-      trasladoVuelta:  g(fila, col, 'Traslado vuelta (min)'),
-      distanciaKm:     g(fila, col, 'Distancia (km)'),
-      totalOperativo:  g(fila, col, 'Total operativo (min)'),
-      notifCorreoProf: g(fila, col, 'Notif. correo prof.'),
-      notifWAProf:     g(fila, col, 'Notif. WA prof.'),
-      notifCorreoCoord:g(fila, col, 'Notif. correo coord.'),
-      notifWACoord:    g(fila, col, 'Notif. WA coord.'),
-      observaciones:   g(fila, col, 'Observaciones'),
-      estado:          estado,
-      timestamp:       g(fila, col, 'Timestamp')
-    });
-  }
-  return visitas;
-}
-
-function g(fila, col, nombre) {
-  var idx = col[nombre];
-  if (idx === undefined) return '';
-  var v = fila[idx];
-  return v === undefined || v === null ? '' : String(v);
-}
-
-function normalizarFecha(raw) {
-  if (!raw) return '';
-  if (raw instanceof Date) {
-    var y = raw.getFullYear();
-    var m = String(raw.getMonth()+1).padStart(2,'0');
-    var d = String(raw.getDate()).padStart(2,'0');
-    return y+'-'+m+'-'+d;
-  }
-  var s = String(raw).trim();
-  var m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m1) return m1[1]+'-'+m1[2].padStart(2,'0')+'-'+m1[3].padStart(2,'0');
-  var m2 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (m2) return m2[3]+'-'+m2[2].padStart(2,'0')+'-'+m2[1].padStart(2,'0');
-  return '';
-}
-
-// ============================================================
-// GUARDAR VISITA
-// ============================================================
-function guardarVisita(d) {
-  var ss   = SpreadsheetApp.openById(SHEET_ID);
-  var hoja = obtenerOCrearHoja(ss, HOJA_VISITAS, HEADERS);
-  migrarHeaders(hoja, HEADERS);
-  var ahora = new Date();
-
-  var fila = [
-    d.id||'', d.fecha||'', d.dia||'', d.horaSalida||'',
-    d.horaLlegadaEst||'', d.horaRegresoEst||'',
-    d.profesional||'', d.rol||'', d.prestacion||'',
-    d.comuna||'', d.localidad||'', d.direccion||'', d.coordenadas||'',
-    d.paciente||'', d.rut||'', d.telefono||'', d.correoFamilia||'',
-    d.acompanantes||'',
-    d.duracionVisita||'', d.trasladoIda||'', d.trasladoVuelta||'',
-    d.distanciaKm||'', d.totalOperativo||'',
-    d.notifCorreoProf||'', d.notifWAProf||'',
-    d.notifCorreoCoord||'', d.notifWACoord||'',
-    d.observaciones||'', d.estado||'Agendada',
-    d.timestamp||ahora.toISOString(),
-    Utilities.formatDate(ahora, 'America/Santiago', 'dd/MM/yyyy HH:mm:ss'),
-    d.lat||'', d.lng||''
-  ];
-
-  hoja.appendRow(fila);
-  var n = hoja.getLastRow();
-  if (n % 2 === 0) {
-    hoja.getRange(n, 1, 1, fila.length).setBackground('#EBF5FB');
-  }
-  var colEst = HEADERS.indexOf('Estado') + 1;
-  hoja.getRange(n, colEst).setBackground('#A9DFBF').setFontWeight('bold');
-  return n;
-}
-
-// ============================================================
-// EMAIL
-// ============================================================
-function enviarEmail(d) {
-  var asunto = '[CSMC Chanco] ' + (d.fecha||'') + ' — ' + (d.paciente||'');
-  var cuerpo =
-    'Nueva visita registrada en CSMC Chanco.\n\n' +
-    'Fecha: '+(d.fecha||'')+' ('+(d.dia||'')+')\n'+
-    'Hora salida: '+(d.horaSalida||'')+'\n'+
-    'Llegada est.: '+(d.horaLlegadaEst||'')+'\n'+
-    'Regreso est.: '+(d.horaRegresoEst||'')+'\n\n'+
-    'Profesional: '+(d.profesional||'')+' ('+(d.rol||'')+')\n'+
-    'Prestación: '+(d.prestacion||'')+'\n\n'+
-    'Paciente/Lugar: '+(d.paciente||'')+'\n'+
-    'Localidad: '+(d.localidad||'')+' / '+(d.comuna||'')+'\n'+
-    (d.direccion?'Dirección: '+d.direccion+'\n':'')+
-    (d.acompanantes?'Acompañantes: '+d.acompanantes+'\n':'')+
-    '\nTraslado ida: '+(d.trasladoIda||'')+' min\n'+
-    'Duración: '+(d.duracionVisita||'')+' min\n'+
-    'Total operativo: '+(d.totalOperativo||'')+' min\n'+
-    (d.observaciones?'\nObs: '+d.observaciones:'') +
-    '\n\n— Sistema Logístico CSMC Chanco';
-  try {
-    if (d.notifCorreoProf) GmailApp.sendEmail(d.notifCorreoProf, asunto, cuerpo);
-    if (d.notifCorreoCoord && d.notifCorreoCoord !== d.notifCorreoProf)
-      GmailApp.sendEmail(d.notifCorreoCoord, asunto, cuerpo);
-  } catch(e) { registrarError('email', e.toString(), d.notifCorreoProf||''); }
-}
-
-// ============================================================
-// HELPERS
-// ============================================================
-function obtenerOCrearHoja(ss, nombre, headers) {
-  var hoja = ss.getSheetByName(nombre);
-  if (!hoja) {
-    hoja = ss.insertSheet(nombre);
-    hoja.appendRow(headers);
-    var rng = hoja.getRange(1, 1, 1, headers.length);
-    rng.setBackground('#0D2B45').setFontColor('#FFFFFF')
-       .setFontWeight('bold').setFontSize(10);
-    hoja.setFrozenRows(1);
-    hoja.setColumnWidths(1, headers.length, 120);
-    hoja.setColumnWidth(1, 50);
-    hoja.setColumnWidth(2, 100);
-    hoja.setColumnWidth(7, 180);
-    hoja.setColumnWidth(14, 180);
-  }
-  return hoja;
-}
-
-function migrarHeaders(hoja, headers) {
-  var lastCol = hoja.getLastColumn();
-  if (lastCol >= headers.length) return;
-  var actuales = hoja.getRange(1, 1, 1, lastCol).getValues()[0];
-  var faltantes = headers.slice(actuales.length);
-  if (!faltantes.length) return;
-  var rng = hoja.getRange(1, actuales.length + 1, 1, faltantes.length);
-  rng.setValues([faltantes]);
-  rng.setBackground('#0D2B45').setFontColor('#FFFFFF')
-     .setFontWeight('bold').setFontSize(10);
-}
-
-function registrarError(origen, msg, ctx) {
-  try {
-    var ss   = SpreadsheetApp.openById(SHEET_ID);
-    var hoja = obtenerOCrearHoja(ss, HOJA_LOG,
-      ['Timestamp','Origen','Mensaje','Contexto']);
-    hoja.appendRow([new Date(), origen, msg, String(ctx).substring(0,500)]);
   } catch(e) {}
 }
+
+function reintentarSync(id) {
+  var r = registros.filter(function(x){return x.id===id;})[0];
+  if (!r) return;
+  guardarEnSheets(r);
+  toast('↻ Reintentando sincronización...');
+}
+
+function reintentarTodo() {
+  var pendientes = registros.filter(function(r){ return r.sync==='pending'||r.sync==='error'; });
+  if (!pendientes.length) { toast('✓ Todo sincronizado'); return; }
+  pendientes.forEach(function(r){ guardarEnSheets(r); });
+  toast('↻ Reintentando '+pendientes.length+' visita(s)...');
+}
+
+// ============================================================
+// UTIL
+// ============================================================
+function hhmm(mins) {
+  var h = Math.floor(mins/60)%24, m = mins%60;
+  return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+}
+
+// ============================================================
+// CARGAR VISITAS DEL DIA DESDE GOOGLE SHEETS
+// ============================================================
+function cargarVisitasHoy() {
+  if (!GAS_URL) return;
+  // Carga TODAS las visitas pendientes (fecha >= hoy), no solo las de hoy.
+  // Asi, visitas agendadas para otros dias de la semana persisten
+  // aunque se cierre y reabra la app.
+  var sid = 'gas_load_'+Date.now();
+  var script = document.createElement('script');
+  script.id = sid;
+  script.src = GAS_URL + '?accion=cargar&callback=recibirVisitas&t='+Date.now();
+  document.head.appendChild(script);
+  setTimeout(function(){
+    var el = document.getElementById(sid);
+    if (el) { document.head.removeChild(el); }
+    if (registros.length === 0) {
+      console.log('Sin visitas pendientes en Sheets');
+    }
+  }, 8000);
+}
+
+function recibirVisitas(data) {
+  if (!data || !data.ok) {
+    console.warn('Sheets: respuesta sin datos', data);
+    return;
+  }
+  var visitas = data.visitas || [];
+  if (!visitas.length) {
+    console.log('Sin visitas registradas hoy en Sheets');
+    return;
+  }
+  var cargadas = 0;
+  visitas.forEach(function(v) {
+    if (!v.paciente && !v.profesional) return; // fila vacía
+    var existe = registros.some(function(r) {
+      return r.ts === v.timestamp || 
+             (r.fecha === v.fecha && r.pac === v.paciente && r.hs === v.horaSalida);
+    });
+    if (existe) return;
+    registros.push({
+      id: registros.length+1,
+      fecha: v.fecha||'', dia: v.dia||'', hs: v.horaSalida||'',
+      llegEst: v.horaLlegadaEst||'', regEst: v.horaRegresoEst||'',
+      prof: v.profesional||'', rol: v.rol||'', prest: v.prestacion||'',
+      comuna: v.comuna||'', local: v.localidad||'',
+      dir: v.direccion||'', coords: v.coordenadas||'',
+      lat: (v.lat!==undefined && v.lat!=='') ? parseFloat(v.lat) : null,
+      lng: (v.lng!==undefined && v.lng!=='') ? parseFloat(v.lng) : null,
+      pac: v.paciente||'', rut: v.rut||'',
+      tel: v.telefono||'', cf: v.correoFamilia||'',
+      nc: v.notifCorreoProf||'', nw: v.notifWAProf||'',
+      cc: v.notifCorreoCoord||'', cw: v.notifWACoord||'',
+      acomp: v.acompanantes||'', obs: v.observaciones||'',
+      durVis: parseInt(v.duracionVisita)||0,
+      tIda: parseInt(v.trasladoIda)||0,
+      tVta: parseInt(v.trasladoVuelta)||0,
+      dist: v.distanciaKm||'—',
+      totOp: v.totalOperativo||'',
+      estado: v.estado||'Agendada',
+      ts: v.timestamp||new Date().toISOString(),
+      sync: 'ok'
+    });
+    cargadas++;
+  });
+  if (cargadas > 0) {
+    registros.forEach(function(r,i){ r.id=i+1; });
+    persistRegistros();
+    renderReg();
+    buildHR();
+    ge('s-nreg').textContent = registros.length;
+    toast('✓ '+cargadas+' visita(s) cargadas desde Google Sheets');
+  }
+}
+
+function togglePrio() {
+  var panel = ge('prio-panel');
+  var arrow = ge('prio-arrow');
+  if (!panel) return;
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+    arrow.textContent = '▲';
+  } else {
+    panel.style.display = 'none';
+    arrow.textContent = '▼';
+  }
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast on';
+  setTimeout(function(){ t.className = 'toast'; }, 3000);
+}
+
+function ge(id) { return document.getElementById(id); }
+function gv(id) { return ge(id).value; }
+
+// ============================================================
+// HEADER / INIT
+// ============================================================
+function initHeader() {
+  setInterval(function() {
+    var n = new Date();
+    ge('s-hora').textContent = n.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var hh = String(n.getHours()).padStart(2,'0');
+    var mm2 = String(n.getMinutes()).padStart(2,'0');
+    var hhmm2 = hh+':'+mm2;
+    var fw = VENTANAS[n.getDay()];
+    var ok = fw && fw.some(function(f){ return hhmm2>=f.ini && hhmm2<=f.fin; });
+    ge('hbadge').className = 'hbadge '+(ok?'ok':'no');
+    ge('hbadge-txt').textContent = ok ? 'Móvil disponible ahora' : 'Móvil no disponible ahora';
+  }, 1000);
+  var n = new Date();
+  ge('s-fecha').textContent = DIAS[n.getDay()]+' '+n.getDate()+' de '+MESES[n.getMonth()]+' '+n.getFullYear();
+}
+
+function initMapa1() {
+  var el = ge('map1');
+  if (typeof L === 'undefined') {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:13px;color:var(--gm);text-align:center;padding:20px;">🗺 El mapa se mostrará al abrir el archivo en Chrome.</div>';
+    return;
+  }
+  el.style.height = '300px';
+  try {
+    mapa1 = L.map('map1',{zoomControl:true,scrollWheelZoom:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© <a href="https://www.openstreetmap.org">OpenStreetMap</a>',maxZoom:18
+    }).addTo(mapa1);
+    mapa1.setView([ORIGEN.lat,ORIGEN.lng],11);
+    mOrigen1 = L.marker([ORIGEN.lat,ORIGEN.lng],{icon:mkIcon('📍 CSMC Chanco','#0D2B45')}).addTo(mapa1);
+  } catch(err) {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:13px;color:var(--gm);text-align:center;padding:20px;">⚠ Error al iniciar el mapa: '+err.message+'</div>';
+  }
+}
+
+function mkIcon(txt,bg) {
+  return L.divIcon({className:'',iconAnchor:[55,10],
+    html:'<div style="background:'+bg+';color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);">'+txt+'</div>'
+  });
+}
+
+// ============================================================
+// SEC 1 — FECHA
+// ============================================================
+function onFecha() {
+  var val = gv('f1');
+  if (!val) return;
+  var dow = new Date(val+'T12:00:00').getDay();
+  ge('f2').value = DIAS[dow];
+  var box = ge('franjas');
+  box.innerHTML = '';
+  var fr = VENTANAS[dow];
+  if (!fr) {
+    box.innerHTML = '<span class="pill off">Este día el móvil no está disponible</span>';
+  } else {
+    fr.forEach(function(f){
+      var s = document.createElement('span');
+      s.className='pill on'; s.textContent=f.lbl; box.appendChild(s);
+    });
+  }
+  calcT();
+}
+
+// ============================================================
+// SEC 2 — PRESTACION
+// ============================================================
+function onPrest() {
+  var sel = ge('f6');
+  var opt = sel.options[sel.selectedIndex];
+  var m = opt ? opt.getAttribute('data-m') : null;
+  ge('tvis').textContent = m||'—';
+  var rol = gv('f5');
+  var w2 = ge('w2');
+  if (sel.value.indexOf('medicamentos')!==-1 && rol && rol!=='TENS') {
+    w2.textContent='⚠ La administración de medicamentos debe realizarla un TENS.';
+    w2.style.display='block';
+  } else { w2.style.display='none'; }
+  calcT();
+}
+
+// ============================================================
+// SEC 3 — DESTINO
+// ============================================================
+function onComuna() {
+  var c = gv('f7');
+  var sel = ge('f8');
+  sel.innerHTML = '<option value="">— Seleccionar sector —</option>';
+  sel.disabled = !c;
+  ge('ebox').style.display='none';
+  ge('elist').innerHTML='';
+  if (!c) return;
+  (SECTORES[c]||[]).forEach(function(s){
+    var o = document.createElement('option');
+    o.value=s.v; o.textContent=s.v; o.dataset.lat=s.lat; o.dataset.lng=s.lng;
+    sel.appendChild(o);
+  });
+}
+
+function onLocalidad() {
+  var sel = ge('f8');
+  var opt = sel.options[sel.selectedIndex];
+  ge('ebox').style.display='none';
+  ge('elist').innerHTML='';
+  if (!opt||!opt.dataset.lat) return;
+  trazarRuta({lat:parseFloat(opt.dataset.lat),lng:parseFloat(opt.dataset.lng)}, opt.value);
+  var ck = gv('f7');
+  var es = ESTABL[ck];
+  if (es&&es.length) {
+    ge('ebox').style.display='block';
+    ge('elist').innerHTML = es.map(function(e,i){
+      return '<div class="ei" id="ei'+i+'" onclick="selEstab('+i+',\''+ck+'\')">'
+        +'<div class="en">'+e.n+'</div>'
+        +'<span class="et '+e.t+'">'+e.t.toUpperCase()+'</span>'
+        +'<span class="ed">'+e.d+'</span>'
+        +'<a class="eg" href="'+e.g+'" target="_blank" onclick="event.stopPropagation()">Maps ↗</a>'
+        +'</div>';
+    }).join('');
+  }
+}
+
+function selEstab(i,ck) {
+  document.querySelectorAll('.ei').forEach(function(el){ el.className='ei'; });
+  var el = ge('ei'+i); if(el) el.className='ei sel';
+  var e = ESTABL[ck][i];
+  ge('f10').value=e.d; ge('clat').value=e.lat; ge('clng').value=e.lng;
+  trazarRuta({lat:e.lat,lng:e.lng},e.n);
+  toast('✓ Ruta hacia '+e.n);
+}
+
+function onCoord(el) {
+  var v = el.value.trim();
+  var m = v.match(/^(-?\d+\.?\d*)\s*[,;\s]+(-?\d+\.?\d*)$/);
+  if (m) { ge('clat').value=m[1]; ge('clng').value=m[2]; }
+}
+
+function irCoord() {
+  var lat = parseFloat(gv('clat').replace(',','.'));
+  var lng = parseFloat(gv('clng').replace(',','.'));
+  if (isNaN(lat)||isNaN(lng)) { toast('⚠ Coordenadas inválidas'); return; }
+  ge('f10').value='Lat: '+lat.toFixed(5)+', Lng: '+lng.toFixed(5);
+  trazarRuta({lat:lat,lng:lng},'Destino personalizado');
+}
+
+function usarGPS() {
+  if (!navigator.geolocation) { toast('⚠ Tu navegador no soporta GPS'); return; }
+  navigator.geolocation.getCurrentPosition(function(p){
+    origenAct={lat:p.coords.latitude,lng:p.coords.longitude};
+    if(mapa1&&mOrigen1){try{mapa1.removeLayer(mOrigen1);}catch(e){}}
+    if(mapa1) mOrigen1=L.marker([origenAct.lat,origenAct.lng],{icon:mkIcon('📱 Mi ubicación','#1A5276')}).addTo(mapa1);
+    toast('✓ Usando tu ubicación actual como punto de partida');
+    if(destAct) trazarRuta(destAct, gv('f8'));
+  },function(){ toast('⚠ No se pudo obtener ubicación. Verifica permisos.'); },{enableHighAccuracy:true,timeout:8000});
+}
+
+function trazarRuta(dest,lbl) {
+  destAct=dest;
+  ge('mst').textContent='Calculando ruta real (OSRM)...';
+  if(mapa1){
+    if(mRuta1){try{mapa1.removeLayer(mRuta1);}catch(e){} mRuta1=null;}
+    if(mDest1){try{mapa1.removeLayer(mDest1);}catch(e){} mDest1=null;}
+    try{ mDest1=L.marker([dest.lat,dest.lng],{icon:mkIcon('🏠 '+lbl,'#0E6655')}).addTo(mapa1); }catch(e){}
+  }
+  fetch('https://router.project-osrm.org/route/v1/driving/'+origenAct.lng+','+origenAct.lat+';'+dest.lng+','+dest.lat+'?overview=full&geometries=geojson')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.code==='Ok'&&d.routes.length){
+        var r=d.routes[0];
+        tIdaAct=Math.ceil(r.duration/60);
+        distAct=parseFloat((r.distance/1000).toFixed(1));
+        if(mapa1){
+          try{
+            mRuta1=L.geoJSON(r.geometry,{style:{color:'#2E86C1',weight:4,opacity:.85}}).addTo(mapa1);
+            mapa1.fitBounds(mRuta1.getBounds().extend([[origenAct.lat,origenAct.lng],[dest.lat,dest.lng]]),{padding:[35,35]});
+          }catch(e){}
+        }
+        ge('tida').textContent=tIdaAct; ge('tvta').textContent=tIdaAct;
+        ge('mst').textContent='Ruta real: '+distAct+' km · '+tIdaAct+' min';
+        ge('rinfo').innerHTML='<div class="rbg">🛣 '+distAct+' km · '+tIdaAct+' min ida · '+tIdaAct+' min vuelta (OSRM)</div>';
+        calcT();
+      } else { fallbackT(lbl); }
+    }).catch(function(){ fallbackT(lbl); });
+}
+
+function fallbackT(lbl) {
+  var FB={'Chanco Centro':10,'Chanco Norte':15,'Chanco Sur':20,'Loanco':25,'Pahuil':40,'Quilhuine':45,'El Colo':30,'El Cardonal':20,'Lagunillas':18,'La Vega':35,'Sector rural Chanco':30,'Pelluhue Centro':45,'Curanipe':55,'Chovellén':60,'Pelluhue Norte':40,'Pelluhue Sur':50,'Sector rural Pelluhue':55,'Cauquenes Centro':90,'Pilén':85,'Cayurranquil':80,'Santa Sofía':88,'Tapihue':70,'Sauzal':75,'Quella':95,'Pocillas':100,'Tres Esquinas':98,'Coronel':92,'Cancha de Los Huevos':93,'Santo Toribio':85};
+  var m=FB[lbl]||40; tIdaAct=m; distAct=null;
+  ge('tida').textContent=m; ge('tvta').textContent=m;
+  ge('mst').textContent='Tiempo estimado (sin OSRM)';
+  ge('rinfo').innerHTML='<div class="rbg" style="background:var(--ap);color:var(--amber);border-color:#F0B27A;">⚠ Estimado — sin ruta calculada</div>';
+  calcT();
+}
+
+function calcT() {
+  var ida=parseInt(ge('tida').textContent)||0;
+  var vis=parseInt(ge('tvis').textContent)||0;
+  var vta=parseInt(ge('tvta').textContent)||0;
+  var hs=gv('f3'), fecha=gv('f1');
+  var tot=ida+vis+vta;
+  ge('ttot').textContent=tot>0?tot:'—';
+  if(hs&&tot>0){
+    var p=hs.split(':'), sm=parseInt(p[0])*60+parseInt(p[1]);
+    ge('tll').textContent=hhmm(sm+ida); ge('trg').textContent=hhmm(sm+tot);
+    if(fecha){
+      var dow=new Date(fecha+'T12:00:00').getDay(), fr=VENTANAS[dow];
+      var ok=fr&&fr.some(function(f){return hs>=f.ini&&hhmm(sm+tot)<=f.fin;});
+      ge('w3').style.display=(!ok&&tot>0)?'block':'none';
+    }
+  } else { ge('tll').textContent='—'; ge('trg').textContent='—'; }
+  if(hs&&fecha){
+    var dow2=new Date(fecha+'T12:00:00').getDay(), fr2=VENTANAS[dow2];
+    var wh=!fr2||!fr2.some(function(f){return hs>=f.ini&&hs<=f.fin;});
+    ge('w1').style.display=wh?'block':'none';
+  }
+}
+
+// ============================================================
+// ACOMPAÑANTES
+// ============================================================
+function addAcomp() {
+  var id=++acCnt, lista=ge('alist'), div=document.createElement('div');
+  div.className='arow'; div.id='ac'+id;
+  var opts=ROLES_AC.map(function(r){return '<option>'+r+'</option>';}).join('');
+  div.innerHTML='<input type="text" placeholder="Nombre completo" id="acn'+id+'">'
+    +'<select id="acr'+id+'"><option value="">— Rol —</option>'+opts+'</select>'
+    +'<button class="bdel" onclick="ge(\'ac'+id+'\').remove()" title="Eliminar">✕</button>';
+  lista.appendChild(div);
+}
+
+function toggleAcomp(cb) {
+  var lista=ge('alist'), btn=ge('badd');
+  if(cb.checked){
+    lista.innerHTML='<div style="font-size:12px;color:var(--gm);padding:5px 0;">Sin acompañante en esta visita.</div>';
+    btn.style.display='none';
+  } else { lista.innerHTML=''; btn.style.display=''; }
+}
+
+function getAcomp() {
+  if(ge('fsa').checked) return 'Sin acompañante';
+  var rows=document.querySelectorAll('#alist .arow'), res=[];
+  rows.forEach(function(row){
+    var id=row.id.replace('ac','');
+    var n=(ge('acn'+id)||{}).value||'', r=(ge('acr'+id)||{}).value||'';
+    if(n.trim()) res.push(n+(r?' ('+r+')':''));
+  });
+  return res.join(' | ');
+}
+
+function resetAcomp() {
+  acCnt=0; ge('alist').innerHTML=''; ge('fsa').checked=false; ge('badd').style.display='';
+}
+
+// ============================================================
+// REGISTRAR
+// ============================================================
+function registrar() {
+  var chk=[['f1','Fecha'],['f3','Hora de salida'],['f4','Profesional'],['f11','Paciente']];
+  for(var i=0;i<chk.length;i++){if(!gv(chk[i][0]).trim()){toast('⚠ Completa: '+chk[i][1]);return;}}
+  var chk2=[['f5','Rol'],['f6','Tipo de prestación'],['f8','Sector/Localidad']];
+  for(var i=0;i<chk2.length;i++){if(!gv(chk2[i][0])){toast('⚠ Selecciona: '+chk2[i][1]);return;}}
+  var fecha=gv('f1'), hs=gv('f3');
+  var dow=new Date(fecha+'T12:00:00').getDay();
+  if(!VENTANAS[dow]){toast('⚠ El móvil no opera ese día. Cambia la fecha.');return;}
+  var ck=gv('f7');
+  var r={
+    id:registros.length+1, fecha:fecha, dia:gv('f2'), hs:hs,
+    llegEst:ge('tll').textContent, regEst:ge('trg').textContent,
+    prof:gv('f4'), rol:gv('f5'), prest:gv('f6'),
+    comuna:ck?({chanco:'Chanco',pelluhue:'Pelluhue',cauquenes:'Cauquenes'}[ck]||ck):'',
+    local:gv('f8'), dir:gv('f9'), coords:gv('f10'),
+    lat:destAct?destAct.lat:null, lng:destAct?destAct.lng:null,
+    pac:gv('f11'), rut:gv('f12'), tel:gv('f13'), cf:gv('f14'),
+    nc:gv('f15'), nw:gv('f16'), cc:gv('f17'), cw:gv('f18'),
+    acomp:getAcomp(), obs:gv('f19'),
+    durVis:parseInt(ge('tvis').textContent)||0,
+    tIda:parseInt(ge('tida').textContent)||0,
+    tVta:parseInt(ge('tvta').textContent)||0,
+    dist:distAct||'—', totOp:ge('ttot').textContent,
+    estado:'Agendada', ts:new Date().toISOString()
+  };
+  r.sync = GAS_URL ? 'pending' : 'local';
+  registros.push(r);
+  persistRegistros();
+  guardarEnSheets(r);
+  renderReg(); buildHR(); limpiar();
+  toast('✓ Visita agendada' + (GAS_URL ? ' — guardando en Sheets...' : ' (sesión local)'));
+  ge('s-nreg').textContent=registros.length;
+}
+
+// ============================================================
+// LIMPIAR
+// ============================================================
+function limpiar() {
+  var ids=['f1','f2','f3','f4','f9','f10','f11','f12','f13','f14','f15','f16','f17','f18','f19','clat','clng'];
+  ids.forEach(function(id){var el=ge(id);if(el)el.value='';});
+  ['f5','f6','f7','f8'].forEach(function(id){var el=ge(id);if(el)el.selectedIndex=0;});
+  ge('f8').disabled=true;
+  ['tida','tvis','tvta','ttot','tll','trg'].forEach(function(id){ge(id).textContent='—';});
+  ge('w1').style.display='none'; ge('w2').style.display='none'; ge('w3').style.display='none';
+  ge('rinfo').innerHTML=''; ge('ebox').style.display='none'; ge('elist').innerHTML='';
+  ge('mst').textContent='Selecciona una localidad o ingresa coordenadas';
+  ge('franjas').innerHTML='<span class="pill off">Selecciona una fecha primero</span>';
+  if(mapa1){
+    if(mRuta1){try{mapa1.removeLayer(mRuta1);}catch(e){} mRuta1=null;}
+    if(mDest1){try{mapa1.removeLayer(mDest1);}catch(e){} mDest1=null;}
+    try{mapa1.setView([ORIGEN.lat,ORIGEN.lng],11);}catch(e){}
+  }
+  destAct=null; tIdaAct=null; distAct=null;
+  origenAct={lat:ORIGEN.lat,lng:ORIGEN.lng};
+  resetAcomp();
+}
+
+// ============================================================
+// RENDER REGISTROS
+// ============================================================
+function renderReg() {
+  var list=ge('rlist'), empty=ge('rempty');
+  ge('rcnt').textContent=registros.length;
+  if(!registros.length){empty.style.display='block';list.innerHTML='';return;}
+  empty.style.display='none';
+  var byD={};
+  registros.forEach(function(r){if(!byD[r.fecha])byD[r.fecha]=[];byD[r.fecha].push(r);});
+  var parts=[];
+  Object.keys(byD).sort().forEach(function(fecha){
+    var dow=new Date(fecha+'T12:00:00').getDay(), fr=VENTANAS[dow];
+    var frS=fr?fr.map(function(f){return f.lbl;}).join(' · '):'Sin ventana horaria';
+    var dia=byD[fecha][0].dia||DIAS[dow];
+    parts.push('<div style="font-size:11px;font-weight:600;color:var(--gm);text-transform:uppercase;padding:11px 3px 5px;display:flex;align-items:center;gap:9px;">'
+      +'<span>'+dia+' '+fecha+'</span>'
+      +'<span style="font-weight:400;text-transform:none;color:var(--bm);">🕐 '+frS+'</span>'
+      +'<button onclick="recalcChain(\''+fecha+'\')" style="margin-left:auto;padding:3px 9px;border-radius:5px;font-size:11px;border:1px solid var(--bl);background:var(--bp);color:var(--blue);cursor:pointer;">↻ Recalcular cadena</button>'
+      +'</div>');
+    byD[fecha].slice().sort(function(a,b){return a.hs.localeCompare(b.hs);}).forEach(function(r,i){
+      var bd=PREST_BADGE[r.prest]||['ba',r.prest];
+      var gi=registros.indexOf(r);
+      var ac=r.acomp?' · 👥 '+r.acomp:'';
+      var sync=r.sync||'ok';
+      var syncHtml='';
+      if(sync==='pending'){
+        syncHtml='<span title="Sincronizando..." style="font-size:13px;color:var(--amber);">⏳</span>';
+      } else if(sync==='error'){
+        syncHtml='<span title="Sin sincronizar - toca para reintentar" onclick="reintentarSync('+r.id+')" style="font-size:13px;color:var(--red);cursor:pointer;">⚠</span>';
+      } else if(sync==='local'){
+        syncHtml='<span title="Solo guardado en este dispositivo" style="font-size:13px;color:var(--gm);">💾</span>';
+      }
+      var estadoActual = r.estado || 'Agendada';
+      var rowCls = 'ri';
+      if (estadoActual === 'Realizada') rowCls += ' ri-done';
+      else if (estadoActual.indexOf('No realizada') === 0) rowCls += ' ri-nodone';
+      var estOpts = ESTADOS.map(function(opt){
+        return '<option value="'+opt+'"'+(opt===estadoActual?' selected':'')+'>'+opt+'</option>';
+      }).join('');
+      var estSelect = '<select class="ri-estado est-'+( estadoActual==='Realizada'?'done':(estadoActual.indexOf('No realizada')===0?'nodone':'pend') )
+        +'" onchange="cambiarEstado('+gi+',this.value)">'+estOpts+'</select>';
+      parts.push('<div class="'+rowCls+'">'
+        +'<div class="rnum">#'+(i+1)+'</div>'
+        +'<div class="rinfo"><h4>'+r.pac+' — '+r.local+'</h4>'
+        +'<p>'+r.prof+' · '+r.rol+' · salida '+r.hs+' · '+r.dist+' km'+ac+'</p></div>'
+        +'<span class="rbadge '+bd[0]+'">'+bd[1]+'</span>'
+        +'<span class="rtime">'+r.hs+'→'+r.regEst+'</span>'
+        +estSelect
+        +syncHtml
+        +'<button class="rdel" onclick="delReg('+gi+')">✕</button>'
+        +'</div>');
+    });
+  });
+  list.innerHTML=parts.join('');
+  actualizarBannerSync();
+}
+
+function actualizarBannerSync() {
+  var pendientes = registros.filter(function(r){ return r.sync==='pending'||r.sync==='error'; }).length;
+  var el = ge('sync-banner');
+  if (!el) return;
+  if (pendientes > 0) {
+    el.style.display = 'flex';
+    el.querySelector('.sb-txt').textContent = pendientes+' visita(s) sin sincronizar con Sheets';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function delReg(i) {
+  registros.splice(i,1);
+  registros.forEach(function(r,j){r.id=j+1;});
+  persistRegistros();
+  renderReg(); buildHR();
+  ge('s-nreg').textContent=registros.length;
+  toast('Registro eliminado');
+}
+
+// ============================================================
+// HOJA DE RUTA
+// ============================================================
+function toMins(hhmm) {
+  var p=hhmm.split(':'); return parseInt(p[0])*60+parseInt(p[1]);
+}
+
+function enFranja(fecha,ini,fin) {
+  var dow=new Date(fecha+'T12:00:00').getDay(), fr=VENTANAS[dow];
+  if(!fr)return false;
+  return fr.some(function(f){
+    return ini>=toMins(f.ini) && fin<=toMins(f.fin);
+  });
+}
+
+function buildHR() {
+  var card=ge('hrcard');
+  if(!registros.length){card.style.display='none';return;}
+  card.style.display='block';
+  var byD={};
+  registros.forEach(function(r){if(!byD[r.fecha])byD[r.fecha]=[];byD[r.fecha].push(r);});
+  var fecha=Object.keys(byD).sort()[0];
+  var vis=byD[fecha].slice().sort(function(a,b){return a.hs.localeCompare(b.hs);});
+  var d=new Date(fecha+'T12:00:00');
+  ge('hr-fecha').textContent=DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()];
+  var hp=vis[0].hs.split(':');
+  var cur=parseInt(hp[0])*60+parseInt(hp[1]);
+  var kmTot=0,timeTot=0,warns=[],stops=[];
+  stops.push({c:'so',t:hhmm(cur),tit:'🏥 '+HOSPITAL.n,sub:'Punto de partida fijo del móvil'});
+  for(var i=0;i<vis.length;i++){
+    var v=vis[i];
+    var trad=v.tIda||0, km=parseFloat(v.dist)||0;
+    var ll=cur+trad, fin=ll+v.durVis;
+    if(km)kmTot+=km; timeTot+=trad+v.durVis;
+    stops.push({c:'leg',sub:'🚗 '+trad+' min traslado'+(km?' · '+km+' km':'')+' hacia '+v.local});
+    // For last visit: also check regreso fits in franja
+    var checkFin = (i===vis.length-1) ? reg : fin;
+    var finFr=enFranja(v.fecha,ll,checkFin);
+    if(!finFr&&i<vis.length-1) warns.push('Visita '+(i+1)+' ('+v.pac+') termina a las '+hhmm(fin)+', fuera de la ventana horaria.');
+    if(i<vis.length-1){
+      var sig=vis[i+1], sp=sig.hs.split(':'), sigM=parseInt(sp[0])*60+parseInt(sp[1]);
+      if(sigM-fin<sig.tIda){
+        warns.push('⚠ Conflicto visita '+(i+1)+' y '+(i+2)+': solo '+(sigM-fin)+' min disponibles, se necesitan ~'+sig.tIda+' min. Cambia el horario de la visita '+(i+2)+'.');
+        finFr=false;
+      }
+    }
+    var ac=v.acomp?' · 👥 '+v.acomp:'';
+    stops.push({c:finFr?'sv':'se',t:hhmm(ll),tit:(i+1)+'. '+v.pac,
+      sub:v.prest+' · '+v.prof+' · '+v.local+(v.dir?' — '+v.dir:'')+ac,
+      dur:v.durVis+' min → sale '+hhmm(fin),eid:v.id,ef:v.fecha,eh:v.hs});
+    cur=fin;
+  }
+  var lv=vis[vis.length-1], tr=lv.tVta||lv.tIda||0, reg=cur+tr;
+  timeTot+=tr;
+  stops.push({c:'leg',sub:'🚗 '+tr+' min regreso al Hospital de Chanco'});
+  // Check if regreso is within franja
+  var regresoOk=enFranja(fecha,cur,reg);
+  if(!regresoOk) warns.push('⚠ El regreso al hospital está estimado a las '+hhmm(reg)+', fuera de la ventana horaria ('+VENTANAS[new Date(fecha+'T12:00:00').getDay()].map(function(f){return f.lbl;}).join(' / ')+').');
+  stops.push({c:regresoOk?'sg':'se',t:hhmm(reg),tit:'🏥 Regreso al '+HOSPITAL.n,sub:'Fin del turno en móvil'+(regresoOk?'':' — ⚠ FUERA DE VENTANA')});
+  ge('hr-part').textContent=vis[0].hs;
+  ge('hr-reg').textContent=hhmm(reg);
+  ge('hr-n').textContent=vis.length;
+  ge('hr-km').textContent=kmTot>0?kmTot.toFixed(1)+' km':'—';
+  ge('hr-tt').textContent=Math.floor(timeTot/60)+'h '+(timeTot%60)+'min';
+  var badge=ge('hr-badge');
+  badge.className='hrbg '+(warns.length?'hrerr':'hrok');
+  badge.textContent=warns.length?'✕ '+warns.length+' conflicto(s)':'✓ Ruta viable';
+  var html='';
+  stops.forEach(function(s){
+    if(s.c==='leg'){
+      html+='<div class="leg"><div class="legl"></div><div class="legb">'+s.sub+'</div></div>';
+    } else {
+      var eb=s.eid?'<button class="ebtn" onclick="toggleEP('+s.eid+')">✏ Editar</button>':'';
+      var ep=s.eid?'<div class="epanel" id="ep'+s.eid+'" style="display:none;">'
+        +'<div class="epg"><div><label>Nueva fecha</label><input type="date" id="ef'+s.eid+'" value="'+s.ef+'"></div>'
+        +'<div><label>Nueva hora salida</label><input type="time" id="eh'+s.eid+'" value="'+s.eh+'"></div>'
+        +'<div style="display:flex;gap:6px;"><button class="bes" onclick="saveEP('+s.eid+')">✓</button>'
+        +'<button class="bec" onclick="toggleEP('+s.eid+')">✕</button></div>'
+        +'</div></div>':'';
+      var isE=s.c==='se';
+      html+='<div class="stop '+s.c+'">'
+        +'<div class="stm">'+(s.t||'')+'</div>'
+        +'<div class="stb">'+(isE?'<div class="errb">':'')
+        +'<div class="stit">'+s.tit+eb+'</div>'
+        +'<div class="ssub">'+s.sub+(s.dur?' · <strong>'+s.dur+'</strong>':'')+'</div>'
+        +ep+(isE?'</div>':'')
+        +'</div></div>';
+    }
+  });
+  ge('hrtl').innerHTML=html;
+  ge('hrwarn').innerHTML=warns.map(function(w){return '<div class="hwi">⚠ ⚠ '+w+'</div>';}).join('');
+}
+
+function toggleEP(vid) {
+  var el=ge('ep'+vid); if(!el)return;
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+
+function saveEP(vid) {
+  var r=registros.filter(function(x){return x.id===vid;})[0]; if(!r)return;
+  var nf=ge('ef'+vid).value, nh=ge('eh'+vid).value;
+  if(nf){r.fecha=nf;r.dia=DIAS[new Date(nf+'T12:00:00').getDay()];}
+  if(nh)r.hs=nh;
+  persistRegistros();
+  renderReg(); buildHR(); toast('✓ Horario actualizado');
+}
+
+async function recalcChain(fecha) {
+  var vis=registros.filter(function(r){return r.fecha===fecha;}).sort(function(a,b){return a.hs.localeCompare(b.hs);});
+  if(!vis.length)return;
+  toast('↻ Recalculando con OSRM...');
+  var prev=HOSPITAL;
+  for(var i=0;i<vis.length;i++){
+    var v=vis[i];
+    if(v.lat&&v.lng){
+      try{
+        var resp=await fetch('https://router.project-osrm.org/route/v1/driving/'+prev.lng+','+prev.lat+';'+v.lng+','+v.lat+'?overview=false');
+        var d=await resp.json();
+        if(d.code==='Ok'&&d.routes.length){v.tIda=Math.ceil(d.routes[0].duration/60);v.tVta=v.tIda;v.dist=parseFloat((d.routes[0].distance/1000).toFixed(1));}
+        prev={lat:v.lat,lng:v.lng};
+      }catch(e){}
+    }
+  }
+  persistRegistros();
+  renderReg(); buildHR(); toast('✓ Cadena recalculada');
+}
+
+// ============================================================
+// MAPA RUTA COMPLETA
+// ============================================================
+function verMapaRuta() {
+  if(!registros.length){toast('⚠ No hay visitas agendadas');return;}
+  var mw=ge('modal-wrapper'); mw.style.display='block';
+  var byD={};
+  registros.forEach(function(r){if(!byD[r.fecha])byD[r.fecha]=[];byD[r.fecha].push(r);});
+  var fecha=Object.keys(byD).sort()[0];
+  var vis=byD[fecha].slice().sort(function(a,b){return a.hs.localeCompare(b.hs);});
+  var d=new Date(fecha+'T12:00:00');
+  ge('mr-fecha').textContent=DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()];
+  setTimeout(function(){initMapaRuta(vis);},150);
+}
+
+function initMapaRuta(vis) {
+  var el=ge('map-ruta');
+  if(mapaR){try{mapaR.remove();}catch(e){} mapaR=null;}
+  el.innerHTML='';
+  if(typeof L==='undefined'){
+    el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:13px;color:var(--gm);text-align:center;padding:20px;">🗺 Mapa disponible al abrir en Chrome.</div>';
+    buildStopsPanel(vis); return;
+  }
+  mapaR=L.map('map-ruta',{zoomControl:true,scrollWheelZoom:true});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(mapaR);
+  var bounds=[[HOSPITAL.lat,HOSPITAL.lng]];
+  var mkN=function(txt,bg,n){return L.divIcon({className:'',iconAnchor:[14,14],
+    html:'<div style="background:'+bg+';color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);">'+(n===0?'⬆':n)+'</div>'});};
+  L.marker([HOSPITAL.lat,HOSPITAL.lng],{icon:mkN('','#0D2B45',0)}).bindPopup('<strong>'+HOSPITAL.n+'</strong><br><small>Punto de partida</small>').addTo(mapaR);
+  vis.forEach(function(v,i){
+    if(v.lat&&v.lng){
+      bounds.push([v.lat,v.lng]);
+      L.marker([v.lat,v.lng],{icon:mkN('','#0E6655',i+1)}).bindPopup('<strong>'+(i+1)+'. '+v.pac+'</strong><br>'+v.local+'<br><small>'+v.hs+' · '+v.prest+'</small>').addTo(mapaR);
+    }
+  });
+  if(bounds.length>1)mapaR.fitBounds(bounds,{padding:[40,40]});
+  else mapaR.setView([HOSPITAL.lat,HOSPITAL.lng],11);
+  dibujarRutasR(vis);
+  ge('mr-leg').innerHTML='<span style="display:flex;align-items:center;gap:5px;"><span style="background:#0D2B45;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;">⬆</span> Partida/Regreso</span>'
+    +'<span style="display:flex;align-items:center;gap:5px;"><span style="background:#0E6655;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">N</span> Visita</span>'
+    +'<span style="color:#2E86C1;font-weight:500;">— Ruta vial real (OSRM)</span>';
+  buildStopsPanel(vis);
+}
+
+async function dibujarRutasR(vis) {
+  if(!mapaR)return;
+  var cols=['#2E86C1','#0E6655','#6C3483','#B7770D','#922B21','#1A5276'];
+  var puntos=[HOSPITAL].concat(vis.filter(function(v){return v.lat&&v.lng;}).map(function(v){return {lat:v.lat,lng:v.lng};}));
+  puntos.push(HOSPITAL);
+  for(var i=0;i<puntos.length-1;i++){
+    var a=puntos[i], b=puntos[i+1];
+    try{
+      var resp=await fetch('https://router.project-osrm.org/route/v1/driving/'+a.lng+','+a.lat+';'+b.lng+','+b.lat+'?overview=full&geometries=geojson');
+      var d=await resp.json();
+      if(d.code==='Ok'&&d.routes.length){
+        var isLast=(i===puntos.length-2);
+        L.geoJSON(d.routes[0].geometry,{style:{color:isLast?'#5D6D7E':cols[i%cols.length],weight:isLast?3:4,opacity:.85,dashArray:isLast?'8,4':null}}).addTo(mapaR);
+      }
+    }catch(e){}
+  }
+}
+
+function buildStopsPanel(vis) {
+  var h='<div class="mstop"><div class="mnum" style="background:#0D2B45;">⬆</div><div><div style="font-size:12px;font-weight:500;">'+HOSPITAL.n+'</div><div style="font-size:11px;color:var(--gm);">Punto de partida · '+vis[0].hs+'</div></div></div>';
+  vis.forEach(function(v,i){
+    h+='<div class="mstop"><div class="mnum" style="background:#0E6655;">'+(i+1)+'</div><div style="flex:1;"><div style="font-size:12px;font-weight:500;">'+v.pac+' — '+v.local+'</div><div style="font-size:11px;color:var(--gm);">'+v.hs+' · '+v.prest+' · '+v.prof+'</div></div>'+(v.lat?'<a href="https://www.google.cl/maps/dir//'+v.lat+','+v.lng+'" target="_blank" style="font-size:11px;color:var(--bm);text-decoration:none;padding:3px 8px;border:1px solid var(--bl);border-radius:4px;white-space:nowrap;">Maps ↗</a>':'')+'</div>';
+  });
+  h+='<div class="mstop"><div class="mnum" style="background:#5D6D7E;">⬇</div><div><div style="font-size:12px;font-weight:500;">Regreso al '+HOSPITAL.n+'</div><div style="font-size:11px;color:var(--gm);">Fin del turno</div></div></div>';
+  ge('mr-stops').innerHTML=h;
+}
+
+function cerrarMapaRuta() {
+  ge('modal-wrapper').style.display='none';
+  if(mapaR){try{mapaR.remove();}catch(e){} mapaR=null;}
+}
+
+// ============================================================
+// COMPARTIR
+// ============================================================
+function buildGMapsURL() {
+  var byD={};
+  registros.forEach(function(r){if(!byD[r.fecha])byD[r.fecha]=[];byD[r.fecha].push(r);});
+  var fecha=Object.keys(byD).sort()[0];
+  var vis=byD[fecha].slice().sort(function(a,b){return a.hs.localeCompare(b.hs);});
+  var base='https://www.google.com/maps/dir/';
+  var o=HOSPITAL.lat+','+HOSPITAL.lng;
+  var wps=vis.filter(function(v){return v.lat&&v.lng;}).map(function(v){return v.lat+','+v.lng;});
+  return base+o+'/'+(wps.length?wps.join('/')+'/'  :'')+o;
+}
+
+function copiarGMaps() {
+  var url=buildGMapsURL();
+  if(navigator.clipboard){navigator.clipboard.writeText(url).then(function(){toast('✓ Enlace Google Maps copiado — pega en WhatsApp o correo');});}
+  else{var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✓ Enlace copiado al portapapeles');}
+}
+
+function abrirGMaps() { window.open(buildGMapsURL(),'_blank'); }
+
+function abrirShare() {
+  if(!registros.length){toast('⚠ No hay visitas agendadas');return;}
+  ge('shresult').style.display='none';
+  ge('share-wrapper').style.display='block';
+}
+
+function cerrarShare() { ge('share-wrapper').style.display='none'; }
+
+function compartirGMaps() {
+  var url=buildGMapsURL();
+  if(navigator.clipboard){navigator.clipboard.writeText(url).then(function(){
+    ge('shresult').innerHTML='✓ <strong>Enlace copiado.</strong> Abre WhatsApp → Nuevo mensaje → Pegar.';
+    ge('shresult').style.display='block';
+  });}
+}
+
+function compartirTexto() {
+  var byD={};
+  registros.forEach(function(r){if(!byD[r.fecha])byD[r.fecha]=[];byD[r.fecha].push(r);});
+  var lines=[];
+  Object.keys(byD).sort().forEach(function(fecha){
+    var d=new Date(fecha+'T12:00:00');
+    lines.push('📋 *HOJA DE RUTA CSMC CHANCO*');
+    lines.push('📅 '+DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()]);
+    lines.push('🏥 Partida: '+HOSPITAL.n);
+    lines.push('');
+    byD[fecha].slice().sort(function(a,b){return a.hs.localeCompare(b.hs);}).forEach(function(v,i){
+      lines.push((i+1)+'. *'+v.pac+'*');
+      lines.push('   👤 '+v.prof+' ('+v.rol+')');
+      lines.push('   📍 '+v.local+(v.dir?' — '+v.dir:''));
+      lines.push('   🕐 Llegada: '+v.llegEst+' · Sale: '+v.regEst);
+      lines.push('   🏷 '+v.prest);
+      if(v.acomp)lines.push('   👥 '+v.acomp);
+      lines.push('');
+    });
+    lines.push('🔙 Regreso est.: '+ge('hr-reg').textContent);
+    lines.push('📏 Km totales: '+ge('hr-km').textContent);
+  });
+  var txt=lines.join('\n');
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){
+    ge('shresult').innerHTML='✓ <strong>Texto copiado con formato WhatsApp.</strong> Pégalo en cualquier chat o correo.';
+    ge('shresult').style.display='block';
+  });}
+}
+
+function compartirExcel() { cerrarShare(); exportXL(); }
+
+function imprimirPDF() { cerrarShare(); setTimeout(function(){window.print();},200); }
+
+// ============================================================
+// GOOGLE SHEETS SYNC
+// ============================================================
+function guardarEnSheets(r) {
+  if (!GAS_URL) { r.sync = 'local'; return; }
+  r.sync = 'pending';
+  renderReg();
+  var cbName = 'gasCb_' + (r.ts+'_'+r.id).replace(/[^a-zA-Z0-9]/g,'_');
+  window[cbName] = function(data) {
+    r.sync = (data && data.ok) ? 'ok' : 'error';
+    renderReg();
+    persistRegistros();
+    try { delete window[cbName]; } catch(e) { window[cbName]=undefined; }
+  };
+  var params = [
+    'accion=nueva',
+    'id='+encodeURIComponent(r.id||''),
+    'fecha='+encodeURIComponent(r.fecha||''),
+    'dia='+encodeURIComponent(r.dia||''),
+    'horaSalida='+encodeURIComponent(r.hs||''),
+    'horaLlegadaEst='+encodeURIComponent(r.llegEst||''),
+    'horaRegresoEst='+encodeURIComponent(r.regEst||''),
+    'profesional='+encodeURIComponent(r.prof||''),
+    'rol='+encodeURIComponent(r.rol||''),
+    'prestacion='+encodeURIComponent(r.prest||''),
+    'comuna='+encodeURIComponent(r.comuna||''),
+    'localidad='+encodeURIComponent(r.local||''),
+    'direccion='+encodeURIComponent(r.dir||''),
+    'coordenadas='+encodeURIComponent(r.coords||''),
+    'paciente='+encodeURIComponent(r.pac||''),
+    'rut='+encodeURIComponent(r.rut||''),
+    'telefono='+encodeURIComponent(r.tel||''),
+    'correoFamilia='+encodeURIComponent(r.cf||''),
+    'acompanantes='+encodeURIComponent(r.acomp||''),
+    'duracionVisita='+encodeURIComponent(r.durVis||''),
+    'trasladoIda='+encodeURIComponent(r.tIda||''),
+    'trasladoVuelta='+encodeURIComponent(r.tVta||''),
+    'distanciaKm='+encodeURIComponent(r.dist||''),
+    'totalOperativo='+encodeURIComponent(r.totOp||''),
+    'notifCorreoProf='+encodeURIComponent(r.nc||''),
+    'notifWAProf='+encodeURIComponent(r.nw||''),
+    'notifCorreoCoord='+encodeURIComponent(r.cc||''),
+    'notifWACoord='+encodeURIComponent(r.cw||''),
+    'observaciones='+encodeURIComponent(r.obs||''),
+    'estado='+encodeURIComponent(r.estado||'Agendada'),
+    'timestamp='+encodeURIComponent(r.ts||''),
+    'lat='+encodeURIComponent(r.lat!=null?r.lat:''),
+    'lng='+encodeURIComponent(r.lng!=null?r.lng:''),
+    'callback='+cbName
+  ].join('&');
+  var url = GAS_URL + '?' + params;
+  var sid = 'gas_'+cbName;
+  var script = document.createElement('script');
+  script.id = sid;
+  script.src = url;
+  script.onerror = function() {
+    if (r.sync === 'pending') { r.sync = 'error'; renderReg(); persistRegistros(); }
+  };
+  document.head.appendChild(script);
+  setTimeout(function(){
+    var el = document.getElementById(sid);
+    if (el) { try{document.head.removeChild(el);}catch(e){} }
+    if (r.sync === 'pending') { r.sync = 'error'; renderReg(); persistRegistros(); }
+  }, 8000);
+}
+
+
+var ESTADOS = [
+  'Agendada',
+  'Realizada',
+  'No realizada - Paciente ausente',
+  'No realizada - Rechazo',
+  'No realizada - Clima/Acceso',
+  'No realizada - Otro motivo'
+];
+
+function cambiarEstado(gi, nuevoEstado) {
+  var r = registros[gi];
+  if (!r) return;
+  r.estado = nuevoEstado;
+  persistRegistros();
+  renderReg();
+  actualizarEstadoEnSheets(r);
+  toast('✓ Estado actualizado: '+nuevoEstado);
+}
+
+function actualizarEstadoEnSheets(r) {
+  if (!GAS_URL || !r.ts) return;
+  var cbName = 'gasEst_' + (r.ts+'_'+r.id).replace(/[^a-zA-Z0-9]/g,'_');
+  window[cbName] = function(data) {
+    try { delete window[cbName]; } catch(e) { window[cbName]=undefined; }
+  };
+  var params = 'accion=actualizar&timestamp='+encodeURIComponent(r.ts)
+    +'&estado='+encodeURIComponent(r.estado)+'&callback='+cbName;
+  var sid = 'gas_'+cbName;
+  var script = document.createElement('script');
+  script.id = sid;
+  script.src = GAS_URL + '?' + params;
+  document.head.appendChild(script);
+  setTimeout(function(){
+    var el = document.getElementById(sid);
+    if (el) { try{document.head.removeChild(el);}catch(e){} }
+  }, 8000);
+}
+
+// ============================================================
+// EXCEL
+// ============================================================
+function exportXL() {
+  if(!registros.length){toast('⚠ No hay registros para exportar');return;}
+  var h=['ID','Fecha','Día','Hora salida','Llegada est.','Regreso est.','Profesional','Rol','Prestación','Comuna','Localidad','Dirección','Coordenadas','Paciente','RUT','Teléfono','Correo familia','Acompañantes','Dur. visita (min)','Traslado ida (min)','Traslado vuelta (min)','Distancia (km)','Total operativo (min)','Notif. correo prof.','Notif. WA prof.','Notif. correo coord.','Notif. WA coord.','Observaciones','Estado','Timestamp'];
+  var rows=registros.map(function(r){return[r.id,r.fecha,r.dia,r.hs,r.llegEst,r.regEst,r.prof,r.rol,r.prest,r.comuna,r.local,r.dir,r.coords,r.pac,r.rut,r.tel,r.cf,r.acomp,r.durVis,r.tIda,r.tVta,r.dist,r.totOp,r.nc,r.nw,r.cc,r.cw,r.obs,r.estado,r.ts];});
+  var wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet([h].concat(rows));
+  XLSX.utils.book_append_sheet(wb,ws,'Registro Visitas');
+  XLSX.writeFile(wb,'CSMC_Chanco_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('✓ Excel exportado');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.onload = function() {
+  initHeader();
+  initMapa1();
+  var n=new Date();
+  var yy=n.getFullYear(), mm=String(n.getMonth()+1).padStart(2,'0'), dd=String(n.getDate()).padStart(2,'0');
+  ge('f1').value=yy+'-'+mm+'-'+dd;
+  onFecha();
+
+  // Recuperar visitas guardadas localmente (por si se cerro sin sincronizar)
+  cargarRegistrosLocal();
+  if (registros.length) {
+    renderReg();
+    buildHR();
+    ge('s-nreg').textContent = registros.length;
+  }
+
+  // Mostrar card de sincronizacion si GAS_URL esta configurada
+  if (GAS_URL) {
+    ge('sc-sync').style.display = 'block';
+    // Cargar visitas pendientes (fecha >= hoy) desde Sheets
+    setTimeout(cargarVisitasHoy, 800);
+    // Reintentar sincronizar visitas locales que quedaron pendientes/con error
+    setTimeout(function(){
+      registros.filter(function(r){ return r.sync==='pending'||r.sync==='error'; })
+               .forEach(function(r){ guardarEnSheets(r); });
+    }, 1500);
+  }
+};
+</script>
+
+<!-- PWA: registrar service worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js')
+      .then(function(reg) {
+        console.log('Service Worker registrado:', reg.scope);
+      })
+      .catch(function(err) {
+        console.warn('Error registrando Service Worker:', err);
+      });
+  });
+}
+</script>
+</body>
+</html>
