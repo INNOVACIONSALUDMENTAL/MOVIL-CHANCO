@@ -1474,7 +1474,6 @@ function imprimirPDF() { cerrarShare(); setTimeout(function(){window.print();},2
 function guardarEnSheets(r) {
   if (!GAS_URL) { r.sync='local'; return; }
   r.sync = 'pending';
-  renderReg();
 
   var params = [
     'accion=nueva',
@@ -1536,6 +1535,25 @@ function guardarEnSheets(r) {
     });
 }
 
+
+var ESTADOS = [
+  'Agendada',
+  'Realizada',
+  'No realizada - Paciente ausente',
+  'No realizada - Rechazo',
+  'No realizada - Clima/Acceso',
+  'No realizada - Otro motivo'
+];
+
+function cambiarEstado(gi, nuevoEstado) {
+  var r = registros[gi];
+  if (!r) return;
+  r.estado = nuevoEstado;
+  persistRegistros();
+  renderReg();
+  actualizarEstadoEnSheets(r);
+  toast('✓ Estado: '+nuevoEstado);
+}
 
 function actualizarEstadoEnSheets(r) {
   if (!GAS_URL || !r.ts) return;
